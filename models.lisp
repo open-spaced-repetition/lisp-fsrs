@@ -36,7 +36,7 @@
 (declaim (ftype (function ((or fixnum double-float)) (values fixnum)) seconds-days)
          (inline seconds-days))
 (defun seconds-days (secs)
-  (truncate secs #.local-time::+seconds-per-day+))
+  (nth-value 0 (truncate secs #.local-time::+seconds-per-day+)))
 
 (declaim (type single-float +decay+ +factor+))
 (defconstant +decay+ -0.5)

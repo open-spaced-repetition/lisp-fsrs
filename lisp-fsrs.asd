@@ -12,6 +12,10 @@
                (:file "fsrs" :depends-on ("package" "models")))
   :in-order-to ((test-op (test-op #:lisp-fsrs/test))))
 
+(defsystem lisp-fsrs/emacs
+  :depends-on (#:asdf #:uiop #:alexandria #:local-time #:slynk #:lisp-fsrs)
+  :components ((:file "emacs")))
+
 (defsystem lisp-fsrs/test
   :depends-on (#:parachute #:closer-mop #:lisp-fsrs)
   :perform (test-op (op c) (symbol-call '#:parachute '#:test (find-symbol (symbol-name '#:test-lisp-fsrs) '#:lisp-fsrs.test)))

@@ -33,13 +33,13 @@
 
 (defconstant most-negative-fixnum-float (coerce most-negative-fixnum 'single-float))
 (defconstant most-positive-fixnum-float (coerce most-positive-fixnum 'single-float))
-(deftype fixnum-float () `(single-float ,most-negative-fixnum-float ,most-positive-fixnum-float))
+(deftype fixnum-float () (list 'single-float most-negative-fixnum-float most-positive-fixnum-float))
 
 (declaim (ftype (function (fsrs single-float) (values fixnum)) fsrs-next-interval))
 (defun fsrs-next-interval (self s &aux (p (fsrs-parameters self)))
   (let ((new-interval (* (/ s +factor+) (1- (expt (parameters-request-retention p) (/ +decay+))))))
     (declare (type fixnum-float new-interval))
-    (min (max (round new-interval) 1) (parameters-maximum-interval p))))
+    (min (max (nth-value 0 (round new-interval)) 1) (parameters-maximum-interval p))))
 
 (declaim (ftype (function (fsrs single-float rating) (values single-float)) fsrs-short-term-stability))
 (defun fsrs-short-term-stability (self stability rating &aux (w (fsrs-pw self)) (r (rating-index rating)))
