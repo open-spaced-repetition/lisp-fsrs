@@ -13,7 +13,7 @@
   :in-order-to ((test-op (test-op #:lisp-fsrs/test))))
 
 (defsystem lisp-fsrs/test
-  :depends-on (#:parachute #:lisp-fsrs)
+  :depends-on (#:parachute #:closer-mop #:lisp-fsrs)
   :perform (test-op (op c) (symbol-call '#:parachute '#:test (find-symbol (symbol-name '#:test-lisp-fsrs) '#:lisp-fsrs.test)))
   :pathname "test/"
-  :components ())
+  :components ((:file "package")))
