@@ -17,24 +17,23 @@
 
 (defstruct review-log
   (rating :again :type rating)
-  (scheduled-days 0 :type fixnum)
-  (elapsed-days 0 :type fixnum)
+  (scheduled-days 0 :type non-negative-fixnum)
+  (elapsed-days 0 :type non-negative-fixnum)
   (review (now) :type timestamp)
   (state :new :type state))
 
 (defstruct card
   (due (now) :type timestamp)
-  (stability 0.0 :type single-float)
-  (difficulty 0.0 :type single-float)
-  (elapsed-days 0 :type fixnum)
-  (scheduled-days 0 :type fixnum)
-  (repeats 0 :type fixnum)
-  (lapses 0 :type fixnum)
+  (stability 0.0 :type non-negative-single-float)
+  (difficulty 0.0 :type non-negative-single-float)
+  (elapsed-days 0 :type non-negative-fixnum)
+  (scheduled-days 0 :type non-negative-fixnum)
+  (repeats 0 :type non-negative-fixnum)
+  (lapses 0 :type non-negative-fixnum)
   (state :new :type state)
   (last-review nil :type (or timestamp null)))
 
-(declaim (ftype (function ((or fixnum double-float)) (values fixnum)) seconds-days)
-         (inline seconds-days))
+(declaim (ftype (function ((or fixnum double-float)) (values fixnum)) seconds-days))
 (defun seconds-days (secs)
   (nth-value 0 (truncate secs #.local-time::+seconds-per-day+)))
 
@@ -42,7 +41,7 @@
 (defconstant +decay+ -0.5)
 (defconstant +factor+ (1- (expt 0.9 (/ +decay+))))
 
-(declaim (ftype (function (card &optional timestamp) (values single-float)) card-retrievability))
+(declaim (ftype (function (card &optional timestamp) (values (single-float 0.0 1.0))) card-retrievability))
 (defun card-retrievability (self &optional (now (now)))
   (if (member (card-state self) '(:learning :review :relearning))
       (let ((elapsed-days (max 0 (seconds-days (timestamp-difference now (card-last-review self))))))
@@ -87,7 +86,7 @@
              (card-state easy) :review)
        (incf (card-lapses again))))))
 
-(declaim (ftype (function (scheduling-cards timestamp fixnum fixnum fixnum)) scheduling-cards-schedule))
+(declaim (ftype (function (scheduling-cards timestamp non-negative-fixnum non-negative-fixnum non-negative-fixnum)) scheduling-cards-schedule))
 (defun scheduling-cards-schedule (self now hard-interval good-interval easy-interval)
   (let ((again (scheduling-cards-again self))
         (hard (scheduling-cards-hard self))
@@ -150,6 +149,6 @@
   :test #'equalp)
 
 (defstruct parameters
-  (request-retention 0.9 :type single-float)
-  (maximum-interval 36500 :type fixnum)
+  (request-retention 0.9 :type non-negative-single-float)
+  (maximum-interval 36500 :type non-negative-fixnum)
   (weights +weights-default+ :type (simple-array single-float (19))))

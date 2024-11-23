@@ -18,15 +18,15 @@
 (defun fsrs-pw (self)
   (parameters-weights (fsrs-parameters self)))
 
-(declaim (ftype (function (fsrs rating) (values single-float)) fsrs-init-stability))
+(declaim (ftype (function (fsrs rating) (values non-negative-single-float)) fsrs-init-stability))
 (defun fsrs-init-stability (self rating &aux (w (fsrs-pw self)) (r (rating-index rating)))
   (max (aref w (1- r)) 0.1))
 
-(declaim (ftype (function (fsrs rating) (values single-float)) fsrs-init-difficulty))
+(declaim (ftype (function (fsrs rating) (values non-negative-single-float)) fsrs-init-difficulty))
 (defun fsrs-init-difficulty (self rating &aux (w (fsrs-pw self)) (r (rating-index rating)))
   (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0))
 
-(declaim (ftype (function (fsrs fixnum single-float) (values single-float)) fsrs-forgetting-curve))
+(declaim (ftype (function (fsrs non-negative-fixnum non-negative-single-float) (values (single-float 0.0 1.0))) fsrs-forgetting-curve))
 (defun fsrs-forgetting-curve (self elapsed-days stability)
   (declare (ignore self))
   (expt (1+ (/ (* +factor+ elapsed-days) stability)) +decay+))
@@ -35,26 +35,26 @@
 (defconstant most-positive-fixnum-float (coerce most-positive-fixnum 'single-float))
 (deftype fixnum-float () (list 'single-float most-negative-fixnum-float most-positive-fixnum-float))
 
-(declaim (ftype (function (fsrs single-float) (values fixnum)) fsrs-next-interval))
+(declaim (ftype (function (fsrs non-negative-single-float) (values non-negative-fixnum)) fsrs-next-interval))
 (defun fsrs-next-interval (self s &aux (p (fsrs-parameters self)))
   (let ((new-interval (* (/ s +factor+) (1- (expt (parameters-request-retention p) (/ +decay+))))))
     (declare (type fixnum-float new-interval))
     (min (max (nth-value 0 (round new-interval)) 1) (parameters-maximum-interval p))))
 
-(declaim (ftype (function (fsrs single-float rating) (values single-float)) fsrs-short-term-stability))
+(declaim (ftype (function (fsrs non-negative-single-float rating) (values non-negative-single-float)) fsrs-short-term-stability))
 (defun fsrs-short-term-stability (self stability rating &aux (w (fsrs-pw self)) (r (rating-index rating)))
   (* stability (exp (* (aref w 17) (+ (- r 3) (aref w 18))))))
 
-(declaim (ftype (function (fsrs single-float single-float) (values single-float)) fsrs-mean-reversion))
+(declaim (ftype (function (fsrs non-negative-single-float single-float) (values single-float)) fsrs-mean-reversion))
 (defun fsrs-mean-reversion (self init current &aux (w (fsrs-pw self)))
   (+ (* (aref w 7) init) (* (- 1.0 (aref w 7)) current)))
 
-(declaim (ftype (function (fsrs single-float rating) (values single-float)) fsrs-next-difficulty))
+(declaim (ftype (function (fsrs non-negative-single-float rating) (values non-negative-single-float)) fsrs-next-difficulty))
 (defun fsrs-next-difficulty (self d rating &aux (w (fsrs-pw self)) (r (rating-index rating)))
   (let ((next-d (- d (* (aref w 6) (- r 3)))))
     (min (max (fsrs-mean-reversion self (fsrs-init-difficulty self :easy) next-d) 1.0) 10.0)))
 
-(declaim (ftype (function (fsrs single-float single-float single-float rating) (values single-float)) fsrs-next-recall-stability))
+(declaim (ftype (function (fsrs non-negative-single-float non-negative-single-float (single-float 0.0 1.0) rating) (values non-negative-single-float)) fsrs-next-recall-stability))
 (defun fsrs-next-recall-stability (self d s r rating &aux (w (fsrs-pw self)))
   (let ((hard-penalty (if (eq rating :hard) (aref w 15) 1.0))
         (easy-bonus (if (eq rating :easy) (aref w 16) 1.0)))
@@ -65,7 +65,7 @@
                 hard-penalty
                 easy-bonus)))))
 
-(declaim (ftype (function (fsrs single-float single-float single-float) (values single-float)) fsrs-next-forget-stability))
+(declaim (ftype (function (fsrs non-negative-single-float non-negative-single-float (single-float 0.0 1.0)) (values non-negative-single-float)) fsrs-next-forget-stability))
 (defun fsrs-next-forget-stability (self d s r &aux (w (fsrs-pw self)))
   (* (aref w 11)
      (expt d (- (aref w 12)))
@@ -87,7 +87,7 @@
           (card-difficulty easy) (fsrs-init-difficulty self :easy)
           (card-stability easy) (fsrs-init-stability self :easy))))
 
-(declaim (ftype (function (fsrs scheduling-cards single-float single-float single-float state)) fsrs-next-ds))
+(declaim (ftype (function (fsrs scheduling-cards non-negative-single-float non-negative-single-float (single-float 0.0 1.0) state)) fsrs-next-ds))
 (defun fsrs-next-ds (self s last-d last-s retrievability state)
   (let ((again (scheduling-cards-again s))
         (hard (scheduling-cards-hard s))

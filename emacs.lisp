@@ -133,7 +133,9 @@
      (t cdr))))
 
 (setf (assoc-value *mappings* 'single-float) 'float
-      (assoc-value *mappings* 'double-float) 'float)
+      (assoc-value *mappings* 'double-float) 'float
+      (assoc-value *mappings* 'non-negative-single-float) 'float
+      (assoc-value *mappings* 'non-negative-fixnum) 'fixnum)
 
 (defun write-toplevel (form output)
   (let ((form (translate form)))

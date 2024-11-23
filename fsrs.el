@@ -44,8 +44,7 @@
  (repeats 0 :type fixnum) (lapses 0 :type fixnum) (state :new :type fsrs-state)
  (last-review nil :type (or fsrs-timestamp null)))
 
-(cl-declaim (ftype (function ((or fixnum float)) fixnum) fsrs-seconds-days)
- (inline fsrs-seconds-days))
+(cl-declaim (ftype (function ((or fixnum float)) fixnum) fsrs-seconds-days))
 
 (cl-defun fsrs-seconds-days (secs) (cl-nth-value 0 (cl-truncate secs 86400)))
 
@@ -56,7 +55,7 @@
 (defconst fsrs-factor (1- (expt 0.9 (/ fsrs-decay))))
 
 (cl-declaim
- (ftype (function (fsrs-card &optional fsrs-timestamp) float)
+ (ftype (function (fsrs-card &optional fsrs-timestamp) (float 0.0 1.0))
   fsrs-card-retrievability))
 
 (cl-defun fsrs-card-retrievability (self &optional (fsrs-now (fsrs-now)))
@@ -212,7 +211,8 @@
  (self fsrs-rating &aux (w (fsrs-pw self)) (r (fsrs-rating-index fsrs-rating)))
  (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0))
 
-(cl-declaim (ftype (function (fsrs fixnum float) float) fsrs-forgetting-curve))
+(cl-declaim
+ (ftype (function (fsrs fixnum float) (float 0.0 1.0)) fsrs-forgetting-curve))
 
 (cl-defun fsrs-forgetting-curve (self elapsed-days stability) (ignore self)
  (expt (1+ (/ (* fsrs-factor elapsed-days) stability)) fsrs-decay))
@@ -262,7 +262,7 @@
     10.0)))
 
 (cl-declaim
- (ftype (function (fsrs float float float fsrs-rating) float)
+ (ftype (function (fsrs float float (float 0.0 1.0) fsrs-rating) float)
   fsrs-next-recall-stability))
 
 (cl-defun fsrs-next-recall-stability
@@ -281,7 +281,8 @@
           (1- (exp (* (- 1.0 r) (aref w 10)))) hard-penalty easy-bonus)))))
 
 (cl-declaim
- (ftype (function (fsrs float float float) float) fsrs-next-forget-stability))
+ (ftype (function (fsrs float float (float 0.0 1.0)) float)
+  fsrs-next-forget-stability))
 
 (cl-defun fsrs-next-forget-stability (self d s r &aux (w (fsrs-pw self)))
  (* (aref w 11) (expt d (- (aref w 12))) (1- (expt (1+ s) (aref w 13)))
@@ -304,7 +305,7 @@
          (fsrs-card-stability easy) (fsrs-init-stability self :easy))))
 
 (cl-declaim
- (ftype #'(fsrs fsrs-scheduling-cards float float float fsrs-state)
+ (ftype #'(fsrs fsrs-scheduling-cards float float (float 0.0 1.0) fsrs-state)
   fsrs-next-ds))
 
 (cl-defun fsrs-next-ds (self s last-d last-s retrievability fsrs-state)
