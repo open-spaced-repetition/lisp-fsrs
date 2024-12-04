@@ -9,11 +9,14 @@
   :depends-on (#:alexandria #:local-time)
   :components ((:file "package")
                (:file "models" :depends-on ("package"))
-               (:file "fsrs" :depends-on ("package" "models")))
+               (:file "parameters" :depends-on ("package" "models"))
+               (:file "scheduler" :depends-on ("package" "models" "parameters"))
+               (:file "basic-scheduler" :depends-on ("package" "models" "parameters" "scheduler"))
+               (:file "long-term-scheduler" :depends-on ("package" "models" "parameters" "scheduler")))
   :in-order-to ((test-op (test-op #:lisp-fsrs/test))))
 
 (defsystem lisp-fsrs/emacs
-  :depends-on (#:asdf #:uiop #:alexandria #:local-time #:slynk #:lisp-fsrs)
+  :depends-on (#:asdf #:uiop #:alexandria #:local-time #:slynk #:introspect-environment #:lisp-fsrs)
   :components ((:file "emacs")))
 
 (defsystem lisp-fsrs/test

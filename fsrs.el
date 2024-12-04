@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 
-;; This file was auto-transpiled from package.lisp, models.lisp, fsrs.lisp.
+;; This file was auto-transpiled from package.lisp, models.lisp, parameters.lisp, scheduler.lisp, basic-scheduler.lisp, long-term-scheduler.lisp.
 
 ;;; Code:
 
@@ -93,55 +93,6 @@
  (%make-scheduling-cards :again again :hard hard :good good :easy easy))
 
 (cl-declaim
- (ftype #'(fsrs-scheduling-cards fsrs-state)
-  fsrs-scheduling-cards-update-state))
-
-(cl-defun fsrs-scheduling-cards-update-state (self fsrs-state)
- (let ((again (fsrs-scheduling-cards-again self))
-       (hard (fsrs-scheduling-cards-hard self))
-       (good (fsrs-scheduling-cards-good self))
-       (easy (fsrs-scheduling-cards-easy self)))
-   (cl-ecase fsrs-state
-    (:new
-     (setf (fsrs-card-state again) :learning
-           (fsrs-card-state hard) :learning
-           (fsrs-card-state good) :learning
-           (fsrs-card-state easy) :review))
-    ((:learning :relearning)
-     (setf (fsrs-card-state again) fsrs-state
-           (fsrs-card-state hard) fsrs-state
-           (fsrs-card-state good) :review
-           (fsrs-card-state easy) :review))
-    (:review
-     (setf (fsrs-card-state again) :relearning
-           (fsrs-card-state hard) :review
-           (fsrs-card-state good) :review
-           (fsrs-card-state easy) :review)
-     (cl-incf (fsrs-card-lapses again))))))
-
-(cl-declaim
- (ftype #'(fsrs-scheduling-cards fsrs-timestamp fixnum fixnum fixnum)
-  fsrs-scheduling-cards-schedule))
-
-(cl-defun fsrs-scheduling-cards-schedule
- (self fsrs-now hard-interval good-interval easy-interval)
- (let ((again (fsrs-scheduling-cards-again self))
-       (hard (fsrs-scheduling-cards-hard self))
-       (good (fsrs-scheduling-cards-good self))
-       (easy (fsrs-scheduling-cards-easy self)))
-   (setf (fsrs-card-scheduled-days again) 0
-         (fsrs-card-scheduled-days hard) hard-interval
-         (fsrs-card-scheduled-days good) good-interval
-         (fsrs-card-scheduled-days easy) easy-interval
-         (fsrs-card-due again) (fsrs-timestamp+ fsrs-now 5 :minute)
-         (fsrs-card-due hard)
-           (if (cl-plusp hard-interval)
-               (fsrs-timestamp+ fsrs-now hard-interval :day)
-               (fsrs-timestamp+ fsrs-now 10 :minute))
-         (fsrs-card-due good) (fsrs-timestamp+ fsrs-now good-interval :day)
-         (fsrs-card-due easy) (fsrs-timestamp+ fsrs-now easy-interval :day))))
-
-(cl-declaim
  (ftype (function (fsrs-scheduling-cards fsrs-card fsrs-timestamp) list)
   fsrs-scheduling-cards-record-log))
 
@@ -175,47 +126,50 @@
            (fsrs-card-elapsed-days fsrs-card) :review fsrs-now :state
            (fsrs-card-state fsrs-card))))))
 
+(cl-deftype fsrs-weights nil 'vector)
+
 (defconst fsrs-weights-default
  (cl-coerce
   '(0.4072 1.1829 3.1262 15.4722 7.2102 0.5316 1.0651 0.0234 1.616 0.1544
     1.0824 1.9813 0.0953 0.2975 2.2042 0.2407 2.9466 0.5034 0.6567)
   'vector))
 
+(cl-declaim (type float fsrs-decay fsrs-factor))
+
+(defconst fsrs-decay -0.5)
+
+(defconst fsrs-factor (1- (expt 0.9 (/ fsrs-decay))))
+
 (cl-defstruct (fsrs-parameters) (request-retention 0.9 :type float)
  (maximum-interval 36500 :type fixnum)
- (weights fsrs-weights-default :type vector))
-
-(cl-defstruct (fsrs (:constructor %make-fsrs))
- (parameters (make-fsrs-parameters) :type fsrs-parameters))
-
-(cl-defun make-fsrs
- (&rest args &key
-  (parameters
-   (progn (cl-remf args :parameters) (apply #'make-fsrs-parameters args)))
-  &allow-other-keys)
- (%make-fsrs :parameters parameters))
-
-(cl-declaim (ftype (function (fsrs) vector) fsrs-pw) (inline fsrs-pw))
-
-(cl-defun fsrs-pw (self) (fsrs-parameters-weights (fsrs-parameters self)))
-
-(cl-declaim (ftype (function (fsrs fsrs-rating) float) fsrs-init-stability))
-
-(cl-defun fsrs-init-stability
- (self fsrs-rating &aux (w (fsrs-pw self)) (r (fsrs-rating-index fsrs-rating)))
- (max (aref w (1- r)) 0.1))
-
-(cl-declaim (ftype (function (fsrs fsrs-rating) float) fsrs-init-difficulty))
-
-(cl-defun fsrs-init-difficulty
- (self fsrs-rating &aux (w (fsrs-pw self)) (r (fsrs-rating-index fsrs-rating)))
- (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0))
+ (weights fsrs-weights-default :type fsrs-weights)
+ (decay fsrs-decay :type float) (factor fsrs-factor :type float))
 
 (cl-declaim
- (ftype (function (fsrs fixnum float) (float 0.0 1.0)) fsrs-forgetting-curve))
+ (ftype (function (fsrs-parameters fixnum float) (float 0.0 1.0))
+  fsrs-parameters-forgetting-curve))
 
-(cl-defun fsrs-forgetting-curve (self elapsed-days stability) (ignore self)
- (expt (1+ (/ (* fsrs-factor elapsed-days) stability)) fsrs-decay))
+(cl-defun fsrs-parameters-forgetting-curve (self elapsed-days stability)
+ (expt (1+ (/ (* (fsrs-parameters-factor self) elapsed-days) stability))
+       (fsrs-parameters-decay self)))
+
+(cl-declaim
+ (ftype (function (fsrs-parameters fsrs-rating) float)
+  fsrs-parameters-init-stability))
+
+(cl-defun fsrs-parameters-init-stability
+ (self fsrs-rating &aux (w (fsrs-parameters-weights self))
+  (r (fsrs-rating-index fsrs-rating)))
+ (max (aref w (1- r)) 0.1))
+
+(cl-declaim
+ (ftype (function (fsrs-parameters fsrs-rating) float)
+  fsrs-parameters-init-difficulty))
+
+(cl-defun fsrs-parameters-init-difficulty
+ (self fsrs-rating &aux (w (fsrs-parameters-weights self))
+  (r (fsrs-rating-index fsrs-rating)))
+ (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0))
 
 (defconst fsrs-most-negative-fixnum-float
  (cl-coerce most-negative-fixnum 'float))
@@ -226,47 +180,59 @@
 (cl-deftype fsrs-fixnum-float nil
  (list 'float fsrs-most-negative-fixnum-float fsrs-most-positive-fixnum-float))
 
-(cl-declaim (ftype (function (fsrs float) fixnum) fsrs-next-interval))
+(cl-declaim
+ (ftype (function (fsrs-parameters float) fixnum)
+  fsrs-parameters-next-interval))
 
-(cl-defun fsrs-next-interval (self s &aux (p (fsrs-parameters self)))
+(cl-defun fsrs-parameters-next-interval (self s)
  (let ((new-interval
-        (* (/ s fsrs-factor)
-           (1- (expt (fsrs-parameters-request-retention p) (/ fsrs-decay))))))
+        (* (/ s (fsrs-parameters-factor self))
+           (1-
+            (expt (fsrs-parameters-request-retention self)
+                  (/ (fsrs-parameters-decay self)))))))
    (cl-declare (type fsrs-fixnum-float new-interval))
    (min (max (cl-nth-value 0 (cl-round new-interval)) 1)
-        (fsrs-parameters-maximum-interval p))))
+        (fsrs-parameters-maximum-interval self))))
 
 (cl-declaim
- (ftype (function (fsrs float fsrs-rating) float) fsrs-short-term-stability))
+ (ftype (function (fsrs-parameters float float) float)
+  fsrs-parameters-mean-reversion))
 
-(cl-defun fsrs-short-term-stability
- (self stability fsrs-rating &aux (w (fsrs-pw self))
-  (r (fsrs-rating-index fsrs-rating)))
- (* stability (exp (* (aref w 17) (+ (- r 3) (aref w 18))))))
-
-(cl-declaim (ftype (function (fsrs float float) float) fsrs-mean-reversion))
-
-(cl-defun fsrs-mean-reversion (self init current &aux (w (fsrs-pw self)))
+(cl-defun fsrs-parameters-mean-reversion
+ (self init current &aux (w (fsrs-parameters-weights self)))
  (+ (* (aref w 7) init) (* (- 1.0 (aref w 7)) current)))
 
 (cl-declaim
- (ftype (function (fsrs float fsrs-rating) float) fsrs-next-difficulty))
+ (ftype (function (fsrs-parameters float fsrs-rating) float)
+  fsrs-parameters-next-difficulty))
 
-(cl-defun fsrs-next-difficulty
- (self d fsrs-rating &aux (w (fsrs-pw self))
+(cl-defun fsrs-parameters-next-difficulty
+ (self d fsrs-rating &aux (w (fsrs-parameters-weights self))
   (r (fsrs-rating-index fsrs-rating)))
  (let ((next-d (- d (* (aref w 6) (- r 3)))))
    (min
-    (max (fsrs-mean-reversion self (fsrs-init-difficulty self :easy) next-d)
-         1.0)
+    (max
+     (fsrs-parameters-mean-reversion self
+      (fsrs-parameters-init-difficulty self :easy) next-d)
+     1.0)
     10.0)))
 
 (cl-declaim
- (ftype (function (fsrs float float (float 0.0 1.0) fsrs-rating) float)
-  fsrs-next-recall-stability))
+ (ftype (function (fsrs-parameters float fsrs-rating) float)
+  fsrs-parameters-short-term-stability))
 
-(cl-defun fsrs-next-recall-stability
- (self d s r fsrs-rating &aux (w (fsrs-pw self)))
+(cl-defun fsrs-parameters-short-term-stability
+ (self stability fsrs-rating &aux (w (fsrs-parameters-weights self))
+  (r (fsrs-rating-index fsrs-rating)))
+ (* stability (exp (* (aref w 17) (+ (- r 3) (aref w 18))))))
+
+(cl-declaim
+ (ftype
+  (function (fsrs-parameters float float (float 0.0 1.0) fsrs-rating) float)
+  fsrs-parameters-next-recall-stability))
+
+(cl-defun fsrs-parameters-next-recall-stability
+ (self d s r fsrs-rating &aux (w (fsrs-parameters-weights self)))
  (let ((hard-penalty
         (if (eq fsrs-rating :hard)
             (aref w 15)
@@ -281,70 +247,185 @@
           (1- (exp (* (- 1.0 r) (aref w 10)))) hard-penalty easy-bonus)))))
 
 (cl-declaim
- (ftype (function (fsrs float float (float 0.0 1.0)) float)
-  fsrs-next-forget-stability))
+ (ftype (function (fsrs-parameters float float (float 0.0 1.0)) float)
+  fsrs-parameters-next-forget-stability))
 
-(cl-defun fsrs-next-forget-stability (self d s r &aux (w (fsrs-pw self)))
+(cl-defun fsrs-parameters-next-forget-stability
+ (self d s r &aux (w (fsrs-parameters-weights self)))
  (* (aref w 11) (expt d (- (aref w 12))) (1- (expt (1+ s) (aref w 13)))
     (exp (* (- 1 r) (aref w 14)))))
 
-(cl-declaim (ftype #'(fsrs fsrs-scheduling-cards) fsrs-init-ds))
+(cl-defstruct (fsrs-scheduler (:constructor nil))
+ (parameters (make-fsrs-parameters) :type fsrs-parameters))
 
-(cl-defun fsrs-init-ds (self s)
- (let ((again (fsrs-scheduling-cards-again s))
-       (hard (fsrs-scheduling-cards-hard s))
-       (good (fsrs-scheduling-cards-good s))
-       (easy (fsrs-scheduling-cards-easy s)))
-   (setf (fsrs-card-difficulty again) (fsrs-init-difficulty self :again)
-         (fsrs-card-stability again) (fsrs-init-stability self :again)
-         (fsrs-card-difficulty hard) (fsrs-init-difficulty self :hard)
-         (fsrs-card-stability hard) (fsrs-init-stability self :hard)
-         (fsrs-card-difficulty good) (fsrs-init-difficulty self :good)
-         (fsrs-card-stability good) (fsrs-init-stability self :good)
-         (fsrs-card-difficulty easy) (fsrs-init-difficulty self :easy)
-         (fsrs-card-stability easy) (fsrs-init-stability self :easy))))
+(cl-defun make-fsrs-scheduler
+ (&rest args &key
+  (parameters
+   (progn
+    (cl-remf args :parameters)
+    (cl-remf args :enable-short-term-p)
+    (apply #'make-fsrs-parameters args)))
+  (enable-short-term-p t) &allow-other-keys)
+ (funcall
+  (if enable-short-term-p
+      'make-fsrs-basic-scheduler
+      'make-fsrs-long-term-scheduler)
+  :parameters parameters))
 
 (cl-declaim
- (ftype #'(fsrs fsrs-scheduling-cards float float (float 0.0 1.0) fsrs-state)
-  fsrs-next-ds))
+ (ftype #'(fsrs-scheduler fsrs-scheduling-cards) fsrs-scheduler-init-ds))
 
-(cl-defun fsrs-next-ds (self s last-d last-s retrievability fsrs-state)
+(cl-defun fsrs-scheduler-init-ds
+ (self s &aux (fsrs-parameters (fsrs-scheduler-parameters self)))
  (let ((again (fsrs-scheduling-cards-again s))
        (hard (fsrs-scheduling-cards-hard s))
        (good (fsrs-scheduling-cards-good s))
        (easy (fsrs-scheduling-cards-easy s)))
-   (setf (fsrs-card-difficulty again) (fsrs-next-difficulty self last-d :again)
-         (fsrs-card-difficulty hard) (fsrs-next-difficulty self last-d :hard)
-         (fsrs-card-difficulty good) (fsrs-next-difficulty self last-d :good)
-         (fsrs-card-difficulty easy) (fsrs-next-difficulty self last-d :easy))
+   (setf (fsrs-card-difficulty again)
+           (fsrs-parameters-init-difficulty fsrs-parameters :again)
+         (fsrs-card-stability again)
+           (fsrs-parameters-init-stability fsrs-parameters :again)
+         (fsrs-card-difficulty hard)
+           (fsrs-parameters-init-difficulty fsrs-parameters :hard)
+         (fsrs-card-stability hard)
+           (fsrs-parameters-init-stability fsrs-parameters :hard)
+         (fsrs-card-difficulty good)
+           (fsrs-parameters-init-difficulty fsrs-parameters :good)
+         (fsrs-card-stability good)
+           (fsrs-parameters-init-stability fsrs-parameters :good)
+         (fsrs-card-difficulty easy)
+           (fsrs-parameters-init-difficulty fsrs-parameters :easy)
+         (fsrs-card-stability easy)
+           (fsrs-parameters-init-stability fsrs-parameters :easy))))
+
+(cl-declaim
+ (ftype #'(fsrs-scheduler fsrs-scheduling-cards fsrs-card)
+  fsrs-scheduler-next-ds))
+
+(cl-defun fsrs-scheduler-next-ds
+ (self s fsrs-card &aux (fsrs-parameters (fsrs-scheduler-parameters self)))
+ (let* ((last-d (fsrs-card-difficulty fsrs-card))
+        (last-s (fsrs-card-stability fsrs-card))
+        (interval (fsrs-card-elapsed-days fsrs-card))
+        (retrievability
+         (fsrs-parameters-forgetting-curve fsrs-parameters interval last-s))
+        (fsrs-state (fsrs-card-state fsrs-card)))
+   (let ((again (fsrs-scheduling-cards-again s))
+         (hard (fsrs-scheduling-cards-hard s))
+         (good (fsrs-scheduling-cards-good s))
+         (easy (fsrs-scheduling-cards-easy s)))
+     (setf (fsrs-card-difficulty again)
+             (fsrs-parameters-next-difficulty fsrs-parameters last-d :again)
+           (fsrs-card-difficulty hard)
+             (fsrs-parameters-next-difficulty fsrs-parameters last-d :hard)
+           (fsrs-card-difficulty good)
+             (fsrs-parameters-next-difficulty fsrs-parameters last-d :good)
+           (fsrs-card-difficulty easy)
+             (fsrs-parameters-next-difficulty fsrs-parameters last-d :easy))
+     (cl-ecase fsrs-state
+      ((:learning :relearning)
+       (setf (fsrs-card-stability again)
+               (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                :again)
+             (fsrs-card-stability hard)
+               (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                :hard)
+             (fsrs-card-stability good)
+               (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                :good)
+             (fsrs-card-stability easy)
+               (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                :easy)))
+      (:review
+       (setf (fsrs-card-stability again)
+               (fsrs-parameters-next-forget-stability fsrs-parameters last-d
+                last-s retrievability)
+             (fsrs-card-stability hard)
+               (fsrs-parameters-next-recall-stability fsrs-parameters last-d
+                last-s retrievability :hard)
+             (fsrs-card-stability good)
+               (fsrs-parameters-next-recall-stability fsrs-parameters last-d
+                last-s retrievability :good)
+             (fsrs-card-stability easy)
+               (fsrs-parameters-next-recall-stability fsrs-parameters last-d
+                last-s retrievability :easy)))))))
+
+(cl-defgeneric scheduler-repeat (self fsrs-card &optional fsrs-now))
+
+(cl-declaim
+ (ftype
+  (function (fsrs-scheduler fsrs-card fsrs-rating &optional fsrs-timestamp)
+   (cl-values fsrs-card fsrs-review-log))
+  fsrs-scheduler-review-card))
+
+(cl-defun fsrs-scheduler-review-card
+ (self fsrs-card fsrs-rating &optional (fsrs-now (fsrs-now)))
+ (let* ((fsrs-scheduling-cards (scheduler-repeat self fsrs-card fsrs-now))
+        (fsrs-scheduling-info (cl-getf fsrs-scheduling-cards fsrs-rating))
+        (fsrs-card (fsrs-scheduling-info-card fsrs-scheduling-info))
+        (fsrs-review-log
+         (fsrs-scheduling-info-review-log fsrs-scheduling-info)))
+   (cl-values fsrs-card fsrs-review-log)))
+
+(cl-defstruct (fsrs-basic-scheduler (:include fsrs-scheduler)))
+
+(cl-declaim
+ (ftype #'(fsrs-basic-scheduler fsrs-scheduling-cards fsrs-state)
+  fsrs-basic-scheduler-update-state))
+
+(cl-defun fsrs-basic-scheduler-update-state (self cards fsrs-state)
+ (ignore self)
+ (let ((again (fsrs-scheduling-cards-again cards))
+       (hard (fsrs-scheduling-cards-hard cards))
+       (good (fsrs-scheduling-cards-good cards))
+       (easy (fsrs-scheduling-cards-easy cards)))
    (cl-ecase fsrs-state
+    (:new
+     (setf (fsrs-card-state again) :learning
+           (fsrs-card-state hard) :learning
+           (fsrs-card-state good) :learning
+           (fsrs-card-state easy) :review))
     ((:learning :relearning)
-     (setf (fsrs-card-stability again)
-             (fsrs-short-term-stability self last-s :again)
-           (fsrs-card-stability hard)
-             (fsrs-short-term-stability self last-s :hard)
-           (fsrs-card-stability good)
-             (fsrs-short-term-stability self last-s :good)
-           (fsrs-card-stability easy)
-             (fsrs-short-term-stability self last-s :easy)))
+     (setf (fsrs-card-state again) fsrs-state
+           (fsrs-card-state hard) fsrs-state
+           (fsrs-card-state good) :review
+           (fsrs-card-state easy) :review))
     (:review
-     (setf (fsrs-card-stability again)
-             (fsrs-next-forget-stability self last-d last-s retrievability)
-           (fsrs-card-stability hard)
-             (fsrs-next-recall-stability self last-d last-s retrievability
-              :hard)
-           (fsrs-card-stability good)
-             (fsrs-next-recall-stability self last-d last-s retrievability
-              :good)
-           (fsrs-card-stability easy)
-             (fsrs-next-recall-stability self last-d last-s retrievability
-              :easy))))))
+     (setf (fsrs-card-state again) :relearning
+           (fsrs-card-state hard) :review
+           (fsrs-card-state good) :review
+           (fsrs-card-state easy) :review)
+     (cl-incf (fsrs-card-lapses again))))))
 
 (cl-declaim
- (ftype (function (fsrs fsrs-card &optional fsrs-timestamp) list) fsrs-repeat))
+ (ftype
+  #'(fsrs-basic-scheduler fsrs-scheduling-cards fsrs-timestamp fixnum fixnum
+     fixnum fixnum)
+  fsrs-basic-scheduler-schedule))
 
-(cl-defun fsrs-repeat (self fsrs-card &optional (fsrs-now (fsrs-now)))
- (let ((fsrs-card (copy-fsrs-card fsrs-card)))
+(cl-defun fsrs-basic-scheduler-schedule
+ (self cards fsrs-now again-interval hard-interval good-interval easy-interval)
+ (ignore self again-interval)
+ (let ((again (fsrs-scheduling-cards-again cards))
+       (hard (fsrs-scheduling-cards-hard cards))
+       (good (fsrs-scheduling-cards-good cards))
+       (easy (fsrs-scheduling-cards-easy cards)))
+   (setf (fsrs-card-scheduled-days again) 0
+         (fsrs-card-scheduled-days hard) hard-interval
+         (fsrs-card-scheduled-days good) good-interval
+         (fsrs-card-scheduled-days easy) easy-interval
+         (fsrs-card-due again) (fsrs-timestamp+ fsrs-now 5 :minute)
+         (fsrs-card-due hard)
+           (if (cl-plusp hard-interval)
+               (fsrs-timestamp+ fsrs-now hard-interval :day)
+               (fsrs-timestamp+ fsrs-now 10 :minute))
+         (fsrs-card-due good) (fsrs-timestamp+ fsrs-now good-interval :day)
+         (fsrs-card-due easy) (fsrs-timestamp+ fsrs-now easy-interval :day))))
+
+(cl-defmethod scheduler-repeat
+ ((self fsrs-basic-scheduler) fsrs-card &optional (fsrs-now (fsrs-now)))
+ (let ((fsrs-card (copy-fsrs-card fsrs-card))
+       (fsrs-parameters (fsrs-scheduler-parameters self)))
    (setf (fsrs-card-elapsed-days fsrs-card)
            (if (eq (fsrs-card-state fsrs-card) :new)
                0
@@ -354,70 +435,131 @@
          (fsrs-card-last-review fsrs-card) fsrs-now)
    (cl-incf (fsrs-card-repeats fsrs-card))
    (let ((s (make-fsrs-scheduling-cards :card fsrs-card)))
-     (fsrs-scheduling-cards-update-state s (fsrs-card-state fsrs-card))
+     (fsrs-basic-scheduler-update-state self s (fsrs-card-state fsrs-card))
      (let ((again (fsrs-scheduling-cards-again s))
            (hard (fsrs-scheduling-cards-hard s))
            (good (fsrs-scheduling-cards-good s))
            (easy (fsrs-scheduling-cards-easy s)))
        (cl-ecase (fsrs-card-state fsrs-card)
-        (:new (fsrs-init-ds self s)
+        (:new (fsrs-scheduler-init-ds self s)
          (setf (fsrs-card-due again) (fsrs-timestamp+ fsrs-now 1 :minute)
                (fsrs-card-due hard) (fsrs-timestamp+ fsrs-now 5 :minute)
                (fsrs-card-due good) (fsrs-timestamp+ fsrs-now 10 :minute))
          (let ((easy-interval
-                (fsrs-next-interval self (fsrs-card-stability easy))))
+                (fsrs-parameters-next-interval fsrs-parameters
+                 (fsrs-card-stability easy))))
            (setf (fsrs-card-scheduled-days easy) easy-interval
                  (fsrs-card-due easy)
                    (fsrs-timestamp+ fsrs-now easy-interval :day))))
-        ((:learning :relearning)
-         (let* ((interval (fsrs-card-elapsed-days fsrs-card))
-                (last-d (fsrs-card-difficulty fsrs-card))
-                (last-s (fsrs-card-stability fsrs-card))
-                (retrievability (fsrs-forgetting-curve self interval last-s)))
-           (fsrs-next-ds self s last-d last-s retrievability
-            (fsrs-card-state fsrs-card))
-           (let* ((hard-interval 0)
-                  (good-interval
-                   (fsrs-next-interval self (fsrs-card-stability good)))
-                  (easy-interval
-                   (max (fsrs-next-interval self (fsrs-card-stability easy))
-                        (1+ good-interval))))
-             (fsrs-scheduling-cards-schedule s fsrs-now hard-interval
-              good-interval easy-interval))))
-        (:review
-         (let* ((interval (fsrs-card-elapsed-days fsrs-card))
-                (last-d (fsrs-card-difficulty fsrs-card))
-                (last-s (fsrs-card-stability fsrs-card))
-                (retrievability (fsrs-forgetting-curve self interval last-s)))
-           (fsrs-next-ds self s last-d last-s retrievability
-            (fsrs-card-state fsrs-card))
-           (let* ((hard-interval
-                   (fsrs-next-interval self (fsrs-card-stability hard)))
-                  (good-interval
-                   (fsrs-next-interval self (fsrs-card-stability good)))
-                  (hard-interval (min hard-interval good-interval))
-                  (good-interval (max good-interval (1+ hard-interval)))
-                  (easy-interval
-                   (max (fsrs-next-interval self (fsrs-card-stability easy))
-                        (1+ good-interval))))
-             (fsrs-scheduling-cards-schedule s fsrs-now hard-interval
-              good-interval easy-interval))))))
+        ((:learning :relearning) (fsrs-scheduler-next-ds self s fsrs-card)
+         (let* ((hard-interval 0)
+                (good-interval
+                 (fsrs-parameters-next-interval fsrs-parameters
+                  (fsrs-card-stability good)))
+                (easy-interval
+                 (max
+                  (fsrs-parameters-next-interval fsrs-parameters
+                   (fsrs-card-stability easy))
+                  (1+ good-interval))))
+           (fsrs-basic-scheduler-schedule self s fsrs-now 0 hard-interval
+            good-interval easy-interval)))
+        (:review (fsrs-scheduler-next-ds self s fsrs-card)
+         (let* ((hard-interval
+                 (fsrs-parameters-next-interval fsrs-parameters
+                  (fsrs-card-stability hard)))
+                (good-interval
+                 (fsrs-parameters-next-interval fsrs-parameters
+                  (fsrs-card-stability good)))
+                (hard-interval (min hard-interval good-interval))
+                (good-interval (max good-interval (1+ hard-interval)))
+                (easy-interval
+                 (max
+                  (fsrs-parameters-next-interval fsrs-parameters
+                   (fsrs-card-stability easy))
+                  (1+ good-interval))))
+           (fsrs-basic-scheduler-schedule self s fsrs-now 0 hard-interval
+            good-interval easy-interval)))))
      (fsrs-scheduling-cards-record-log s fsrs-card fsrs-now))))
+
+(cl-defstruct (fsrs-long-term-scheduler (:include fsrs-scheduler)))
+
+(cl-declaim
+ (ftype #'(fsrs-long-term-scheduler fsrs-scheduling-cards fsrs-state)
+  fsrs-long-term-scheduler-update-state))
+
+(cl-defun fsrs-long-term-scheduler-update-state (self cards fsrs-state)
+ (ignore self fsrs-state)
+ (let ((again (fsrs-scheduling-cards-again cards))
+       (hard (fsrs-scheduling-cards-hard cards))
+       (good (fsrs-scheduling-cards-good cards))
+       (easy (fsrs-scheduling-cards-easy cards)))
+   (setf (fsrs-card-state again) :review
+         (fsrs-card-state hard) :review
+         (fsrs-card-state good) :review
+         (fsrs-card-state easy) :review)))
 
 (cl-declaim
  (ftype
-  (function (fsrs fsrs-card fsrs-rating &optional fsrs-timestamp)
-   (cl-values fsrs-card fsrs-review-log))
-  fsrs-review-card))
+  #'(fsrs-long-term-scheduler fsrs-scheduling-cards fsrs-timestamp fixnum
+     fixnum fixnum fixnum)
+  fsrs-long-term-scheduler-schedule))
 
-(cl-defun fsrs-review-card
- (self fsrs-card fsrs-rating &optional (fsrs-now (fsrs-now)))
- (let* ((fsrs-scheduling-cards (fsrs-repeat self fsrs-card fsrs-now))
-        (fsrs-scheduling-info (cl-getf fsrs-scheduling-cards fsrs-rating))
-        (fsrs-card (fsrs-scheduling-info-card fsrs-scheduling-info))
-        (fsrs-review-log
-         (fsrs-scheduling-info-review-log fsrs-scheduling-info)))
-   (cl-values fsrs-card fsrs-review-log)))
+(cl-defun fsrs-long-term-scheduler-schedule
+ (self cards fsrs-now again-interval hard-interval good-interval easy-interval)
+ (ignore self)
+ (let ((again (fsrs-scheduling-cards-again cards))
+       (hard (fsrs-scheduling-cards-hard cards))
+       (good (fsrs-scheduling-cards-good cards))
+       (easy (fsrs-scheduling-cards-easy cards)))
+   (setf (fsrs-card-scheduled-days again) again-interval
+         (fsrs-card-scheduled-days hard) hard-interval
+         (fsrs-card-scheduled-days good) good-interval
+         (fsrs-card-scheduled-days easy) easy-interval
+         (fsrs-card-due again) (fsrs-timestamp+ fsrs-now again-interval :day)
+         (fsrs-card-due hard) (fsrs-timestamp+ fsrs-now hard-interval :day)
+         (fsrs-card-due good) (fsrs-timestamp+ fsrs-now good-interval :day)
+         (fsrs-card-due easy) (fsrs-timestamp+ fsrs-now easy-interval :day))))
+
+(cl-defmethod scheduler-repeat
+ ((self fsrs-long-term-scheduler) fsrs-card &optional (fsrs-now (fsrs-now)))
+ (let ((fsrs-card (copy-fsrs-card fsrs-card))
+       (fsrs-parameters (fsrs-scheduler-parameters self)))
+   (setf (fsrs-card-elapsed-days fsrs-card)
+           (if (eq (fsrs-card-state fsrs-card) :new)
+               0
+               (fsrs-seconds-days
+                (fsrs-timestamp-difference fsrs-now
+                 (fsrs-card-last-review fsrs-card))))
+         (fsrs-card-last-review fsrs-card) fsrs-now)
+   (cl-incf (fsrs-card-repeats fsrs-card))
+   (let ((s (make-fsrs-scheduling-cards :card fsrs-card)))
+     (fsrs-long-term-scheduler-update-state self s (fsrs-card-state fsrs-card))
+     (let ((again (fsrs-scheduling-cards-again s))
+           (hard (fsrs-scheduling-cards-hard s))
+           (good (fsrs-scheduling-cards-good s))
+           (easy (fsrs-scheduling-cards-easy s)))
+       (if (eq (fsrs-card-state fsrs-card) :new)
+           (fsrs-scheduler-init-ds self s)
+           (fsrs-scheduler-next-ds self s fsrs-card))
+       (let* ((again-interval
+               (fsrs-parameters-next-interval fsrs-parameters
+                (fsrs-card-stability again)))
+              (hard-interval
+               (fsrs-parameters-next-interval fsrs-parameters
+                (fsrs-card-stability hard)))
+              (good-interval
+               (fsrs-parameters-next-interval fsrs-parameters
+                (fsrs-card-stability good)))
+              (easy-interval
+               (fsrs-parameters-next-interval fsrs-parameters
+                (fsrs-card-stability easy)))
+              (again-interval (min again-interval hard-interval))
+              (hard-interval (max hard-interval (1+ again-interval)))
+              (good-interval (max good-interval (1+ hard-interval)))
+              (easy-interval (max easy-interval (1+ good-interval))))
+         (fsrs-long-term-scheduler-schedule self s fsrs-now again-interval
+          hard-interval good-interval easy-interval)))
+     (fsrs-scheduling-cards-record-log s fsrs-card fsrs-now))))
 
 (provide 'fsrs)
 ;;; fsrs.el ends here

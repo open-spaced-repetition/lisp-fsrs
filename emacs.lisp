@@ -101,7 +101,7 @@
            (name (car name-and-options))
            (name-and-options (translate-definition name-and-options))
            (translated-name (car name-and-options)))
-      (list* 'cl-defstruct name-and-options
+      (list* 'cl-defstruct (translate name-and-options)
              (loop :for slot :in slots
                    :for (slot-name . slot-options) := (ensure-cons slot)
                    :do (setf (assoc-value *mappings* (symbolicate name '#:- slot-name)) (symbolicate translated-name '#:- slot-name))
@@ -111,6 +111,22 @@
                             (assoc-value *mappings* (symbolicate name '#:-p)) (symbolicate translated-name '#:-p)
                             (assoc-value *mappings* (symbolicate '#:make- name)) (symbolicate '#:make- translated-name)
                             (assoc-value *mappings* (symbolicate '#:copy- name)) (symbolicate '#:copy- translated-name)))))))
+
+(defmethod translate-form ((car (eql 'coerce)) args)
+  (destructuring-bind (object type) args
+    `(cl-coerce
+      ,(translate object)
+      ,(translate
+        (if (constantp type)
+            (multiple-value-bind (expansion expandedp)
+                (introspect-environment:typexpand
+                 (mapcar
+                  (compose (rcurry #'find-symbol #.(find-package '#:lisp-fsrs)) #'symbol-name)
+                  (ensure-list (eval type))))
+              (if expandedp
+                  `',(if (and (listp expansion) (null (cdr expansion))) (car expansion) expansion)
+                  type))
+            type)))))
 
 (defmethod translate-form ((car (eql 'simple-array)) cdr)
   'vector)
@@ -128,7 +144,7 @@
      (0 nil)
      (1 (let ((clause (first cdr)))
           (if (eq (car clause) 'ignore)
-              (return-from translate-form clause)
+              (return-from translate-form (translate clause))
               (list clause))))
      (t cdr))))
 

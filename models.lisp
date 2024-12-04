@@ -62,47 +62,6 @@
 (defun make-scheduling-cards (&key (card (make-card)) (again (copy-card card)) (hard (copy-card card)) (good (copy-card card)) (easy (copy-card card)))
   (%make-scheduling-cards :again again :hard hard :good good :easy easy))
 
-(declaim (ftype (function (scheduling-cards state)) scheduling-cards-update-state))
-(defun scheduling-cards-update-state (self state)
-  (let ((again (scheduling-cards-again self))
-        (hard (scheduling-cards-hard self))
-        (good (scheduling-cards-good self))
-        (easy (scheduling-cards-easy self)))
-    (ecase state
-      (:new
-       (setf (card-state again) :learning
-             (card-state hard) :learning
-             (card-state good) :learning
-             (card-state easy) :review))
-      ((:learning :relearning)
-       (setf (card-state again) state
-             (card-state hard) state
-             (card-state good) :review
-             (card-state easy) :review))
-      (:review
-       (setf (card-state again) :relearning
-             (card-state hard) :review
-             (card-state good) :review
-             (card-state easy) :review)
-       (incf (card-lapses again))))))
-
-(declaim (ftype (function (scheduling-cards timestamp non-negative-fixnum non-negative-fixnum non-negative-fixnum)) scheduling-cards-schedule))
-(defun scheduling-cards-schedule (self now hard-interval good-interval easy-interval)
-  (let ((again (scheduling-cards-again self))
-        (hard (scheduling-cards-hard self))
-        (good (scheduling-cards-good self))
-        (easy (scheduling-cards-easy self)))
-    (setf (card-scheduled-days again) 0
-          (card-scheduled-days hard) hard-interval
-          (card-scheduled-days good) good-interval
-          (card-scheduled-days easy) easy-interval
-          (card-due again) (timestamp+ now 5 :minute)
-          (card-due hard) (if (plusp hard-interval)
-                              (timestamp+ now hard-interval :day)
-                              (timestamp+ now 10 :minute))
-          (card-due good) (timestamp+ now good-interval :day)
-          (card-due easy) (timestamp+ now easy-interval :day))))
-
 (declaim (ftype (function (scheduling-cards card timestamp) (values list)) scheduling-cards-record-log))
 (defun scheduling-cards-record-log (self card now)
   (let ((again (scheduling-cards-again self))
@@ -141,14 +100,3 @@
                               :elapsed-days (card-elapsed-days card)
                               :review now
                               :state (card-state card))))))
-
-(define-constant +weights-default+
-    (coerce
-     '(0.4072 1.1829 3.1262 15.4722 7.2102 0.5316 1.0651 0.0234 1.616 0.1544 1.0824 1.9813 0.0953 0.2975 2.2042 0.2407 2.9466 0.5034 0.6567)
-     '(simple-array single-float (19)))
-  :test #'equalp)
-
-(defstruct parameters
-  (request-retention 0.9 :type non-negative-single-float)
-  (maximum-interval 36500 :type non-negative-fixnum)
-  (weights +weights-default+ :type (simple-array single-float (19))))
