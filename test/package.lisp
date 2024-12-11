@@ -12,6 +12,8 @@
      'weights)
   :test #'equalp)
 
+(define-constant +test-ratings+ '(:good :good :good :good :good :good :again :again :good :good :good :good :good) :test #'equal)
+
 (declaim (ftype (function (single-float single-float) (values boolean)) float=))
 (defun float= (a b)
   (< (abs (- a b)) 0.001))
@@ -19,10 +21,10 @@
 (define-test test-lisp-fsrs)
 
 (define-test test-review-card :parent test-lisp-fsrs
-  (loop :with f := (make-scheduler :weights +test-w+)
+  (loop :with scheduler := (make-scheduler :weights +test-w+)
         :for now := (encode-timestamp 0 0 30 12 29 11 2022 :timezone +utc-zone+) :then (card-due card)
-        :for rating :in '(:good :good :good :good :good :good :again :again :good :good :good :good :good)
-        :for card := (nth-value 0 (scheduler-review-card f (or card (make-card)) rating now))
+        :for rating :in +test-ratings+
+        :for card := (nth-value 0 (scheduler-review-card scheduler (or card (make-card)) rating now))
         :for ivl := (card-scheduled-days card)
         :collect ivl :into ivl-history
         :finally (is equal '(0 4 17 62 198 563 0 0 9 27 74 190 457) ivl-history)))
@@ -39,9 +41,9 @@
            (is float= 5.0976 (card-difficulty (scheduling-info-card (getf scheduling-cards :good))))))
 
 (define-test test-repeat-default-arg :parent test-lisp-fsrs
-  (let* ((f (make-scheduler))
+  (let* ((scheduler (make-scheduler))
          (card-object (make-card))
-         (scheduling-cards (scheduler-repeat f card-object))
+         (scheduling-cards (scheduler-repeat scheduler card-object))
          (card-rating :good)
          (card-object (scheduling-info-card (getf scheduling-cards card-rating)))
          (due (card-due card-object))
@@ -49,10 +51,10 @@
     (is > 500 time_delta)))
 
 (define-test test-datetime :parent test-lisp-fsrs
-  (let ((f (make-scheduler))
+  (let ((scheduler (make-scheduler))
         (card (make-card)))
     (is timestamp<= (now) (card-due card))
-    (let* ((scheduling-cards (scheduler-repeat f card (now)))
+    (let* ((scheduling-cards (scheduler-repeat scheduler card (now)))
            (card (scheduling-info-card (getf scheduling-cards :good))))
       (is timestamp<= (card-due card) (card-last-review card)))))
 
@@ -69,12 +71,12 @@
 
 (define-test test-card-serialize :parent test-lisp-fsrs
   (enable-read-macros)
-  (let* ((f (make-scheduler))
+  (let* ((scheduler (make-scheduler))
          (card (make-card))
          (card-string (write-to-string card :readably t))
          (copied-card (read-from-string card-string)))
     (is equals card copied-card)
-    (let* ((scheduling-cards (scheduler-repeat f card))
+    (let* ((scheduling-cards (scheduler-repeat scheduler card))
            (repeated-card (scheduling-info-card (getf scheduling-cards :good)))
            (repeated-card-string (write-to-string repeated-card :readably t))
            (copied-repeat-card (read-from-string repeated-card-string)))
@@ -82,16 +84,16 @@
 
 (define-test test-review-log-serialize :parent test-lisp-fsrs
   (enable-read-macros)
-  (let* ((f (make-scheduler))
+  (let* ((scheduler (make-scheduler))
          (card (make-card))
-         (scheduling-cards (scheduler-repeat f card))
+         (scheduling-cards (scheduler-repeat scheduler card))
          (rating :again)
          (card (scheduling-info-card (getf scheduling-cards rating)))
          (review-log (scheduling-info-review-log (getf scheduling-cards rating)))
          (review-log-string (write-to-string review-log :readably t))
          (copied-review-log (read-from-string review-log-string)))
     (is equals review-log copied-review-log)
-    (let* ((scheduling-cards (scheduler-repeat f card))
+    (let* ((scheduling-cards (scheduler-repeat scheduler card))
            (rating :good)
            (card (scheduling-info-card (getf scheduling-cards rating)))
            (next-review-log (scheduling-info-review-log (getf scheduling-cards rating)))
@@ -101,33 +103,33 @@
       (is equals next-review-log copied-next-review-log))))
 
 (define-test test-custom-scheduler-args :parent test-lisp-fsrs
-  (loop :with f := (make-scheduler
-                    :weights (coerce
-                              '(0.4197
-                                1.1869
-                                3.0412
-                                15.2441
-                                7.1434
-                                0.6477
-                                1.0007
-                                0.0674
-                                1.6597
-                                0.1712
-                                1.1178
-                                2.0225
-                                0.0904
-                                0.3025
-                                2.1214
-                                0.2498
-                                2.9466
-                                0.0
-                                0.6468)
-                              'weights)
-                    :request-retention 0.9
-                    :maximum-interval 36500)
+  (loop :with scheduler := (make-scheduler
+                            :weights (coerce
+                                      '(0.4197
+                                        1.1869
+                                        3.0412
+                                        15.2441
+                                        7.1434
+                                        0.6477
+                                        1.0007
+                                        0.0674
+                                        1.6597
+                                        0.1712
+                                        1.1178
+                                        2.0225
+                                        0.0904
+                                        0.3025
+                                        2.1214
+                                        0.2498
+                                        2.9466
+                                        0.0
+                                        0.6468)
+                                      'weights)
+                            :request-retention 0.9
+                            :maximum-interval 36500)
         :for now := (encode-timestamp 0 0 30 12 29 11 2022 :timezone +utc-zone+) :then (card-due card)
-        :for rating :in '(:good :good :good :good :good :good :again :again :good :good :good :good :good)
-        :for card := (nth-value 0 (scheduler-review-card f (or card (make-card)) rating now))
+        :for rating :in +test-ratings+
+        :for card := (nth-value 0 (scheduler-review-card scheduler (or card (make-card)) rating now))
         :for ivl := (card-scheduled-days card)
         :collect ivl :into ivl-history
         :finally (is equal ivl-history '(0 3 13 50 163 473 0 0 12 34 91 229 541)))
@@ -164,20 +166,38 @@
       (is = maximum-interval-2 (parameters-maximum-interval p)))))
 
 (define-test test-retrievability :parent test-lisp-fsrs
-  (let* ((f (make-scheduler))
+  (let* ((scheduler (make-scheduler))
          (card (make-card))
          (retrievability (card-retrievability card)))
     (is eq :new (card-state card))
     (is = 0 retrievability)
-    (setf card (nth-value 0 (scheduler-review-card f card :good))
+    (setf card (nth-value 0 (scheduler-review-card scheduler card :good))
           retrievability (card-retrievability card))
     (is eq :learning (card-state card))
     (true (<= 0 (card-retrievability card) 1))
-    (setf card (nth-value 0 (scheduler-review-card f card :good))
+    (setf card (nth-value 0 (scheduler-review-card scheduler card :good))
           retrievability (card-retrievability card))
     (is eq :review (card-state card))
     (true (<= 0 (card-retrievability card) 1))
-    (setf card (nth-value 0 (scheduler-review-card f card :again))
+    (setf card (nth-value 0 (scheduler-review-card scheduler card :again))
           retrievability (card-retrievability card))
     (is eq :relearning (card-state card))
     (true (<= 0 (card-retrievability card) 1))))
+
+(defun float-list-equal (a b)
+  (when (= (length a) (length b))
+    (every #'float= a b)))
+
+(define-test test-long-term-scheduler :parent test-lisp-fsrs
+  (loop :with scheduler := (make-scheduler :weights +test-w+ :enable-short-term-p nil)
+        :for now := (encode-timestamp 0 0 30 12 29 11 2022 :timezone +utc-zone+) :then (card-due card)
+        :for rating :in +test-ratings+
+        :for card := (nth-value 0 (scheduler-review-card scheduler (or card (make-card)) rating now))
+        :for ivl := (card-scheduled-days card)
+        :collect ivl :into ivl-history
+        :collect (card-stability card) :into stabilities
+        :collect (card-difficulty card) :into difficulties
+        :finally
+           (is equal '(3 13 48 155 445 1158 17 3 9 27 74 190 457) ivl-history)
+           (is float-list-equal '(3.0412 13.0913 48.1585 154.9373 445.0556 1158.0778 16.6306 2.9888 9.4633 26.9474 73.9723 189.7037 457.4379) stabilities)
+           (is float-list-equal '(4.4909 4.2666 4.0575 3.8624 3.6804 3.5108 5.219 6.8122 6.4314 6.0763 5.7452 5.4363 5.1483) difficulties)))
