@@ -3,9 +3,9 @@
   :author "Bohong Huang <bohonghuang@qq.com>"
   :maintainer "Bohong Huang <bohonghuang@qq.com>"
   :license "MIT"
-  :homepage "https://github.com/bohonghuang/lisp-fsrs"
-  :bug-tracker "https://github.com/bohonghuang/lisp-fsrs/issues"
-  :source-control (:git "https://github.com/bohonghuang/lisp-fsrs.git")
+  :homepage "https://github.com/open-spaced-repetition/lisp-fsrs"
+  :bug-tracker "https://github.com/open-spaced-repetition/lisp-fsrs/issues"
+  :source-control (:git "https://github.com/open-spaced-repetition/lisp-fsrs.git")
   :depends-on (#:alexandria #:local-time)
   :components ((:file "package")
                (:file "models" :depends-on ("package"))
