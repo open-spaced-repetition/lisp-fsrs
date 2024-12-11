@@ -1,0 +1,76 @@
+#+TITLE: LISP-FSRS
+Implementation of the FSRS algorithm in Common Lisp and auto-transpiled to Emacs Lisp.
+* Usage
+** Common Lisp
+#+BEGIN_SRC lisp
+  CL-USER> (ql:quickload :lisp-fsrs)      ; Ensure you have cloned this repository into the `local-projects' directory under your Quicklisp installation root.
+  To load "lisp-fsrs":
+    Load 1 ASDF system:
+      lisp-fsrs
+  ; Loading "lisp-fsrs"
+  (:LISP-FSRS)
+  CL-USER> (defparameter *weights* '(0.4072 1.1829 3.1262 15.4722 7.2102 0.5316 1.0651 0.0234 1.616 0.1544 1.0824 1.9813 0.0953 0.2975 2.2042 0.2407 2.9466 0.5034 0.6567))
+  ,*WEIGHTS*
+  CL-USER> (setf *weights* (coerce *weights* 'fsrs:weights))
+  #(0.4072 1.1829 3.1262 15.4722 7.2102 0.5316 1.0651 0.0234 1.616 0.1544 1.0824
+    1.9813 0.0953 0.2975 2.2042 0.2407 2.9466 0.5034 0.6567)
+  CL-USER> (defparameter *scheduler* (fsrs:make-scheduler :weights *weights*))
+  ,*SCHEDULER*
+  CL-USER> (defparameter *card* (fsrs:make-card))
+  ,*CARD*
+  CL-USER> *card*
+  #S(LISP-FSRS:CARD
+     :DUE @2024-12-11T23:29:20.562215+08:00
+     :STABILITY 0.0
+     :DIFFICULTY 0.0
+     :ELAPSED-DAYS 0
+     :SCHEDULED-DAYS 0
+     :REPEATS 0
+     :LAPSES 0
+     :STATE :NEW
+     :LAST-REVIEW NIL)
+  CL-USER> (setf *card* (fsrs:scheduler-review-card *scheduler* *card* :good))
+  #S(LISP-FSRS:CARD
+     :DUE @2024-12-11T23:42:48.842234+08:00
+     :STABILITY 3.1262
+     :DIFFICULTY 5.3145776
+     :ELAPSED-DAYS 0
+     :SCHEDULED-DAYS 0
+     :REPEATS 1
+     :LAPSES 0
+     :STATE :LEARNING
+     :LAST-REVIEW @2024-12-11T23:32:48.842234+08:00)
+#+END_SRC
+
+To generate the ~fsrs~ package for Emacs after changing the code, ensure
+you are running the current Lisp session using ~sly~ in Emacs, then:
+
+#+BEGIN_SRC lisp
+  CL-USER> (ql:quickload :lisp-fsrs/emacs)
+  To load "lisp-fsrs/emacs":
+    Load 1 ASDF system:
+      lisp-fsrs/emacs
+  ; Loading "lisp-fsrs/emacs"
+  [package lisp-fsrs.emacs]..
+  (:LISP-FSRS/EMACS)
+  CL-USER> (fsrs.emacs:translate-system)
+  NIL
+#+END_SRC
+** Emacs Lisp
+#+BEGIN_SRC emacs-lisp
+  ELISP> (package-vc-install "https://github.com/open-spaced-repetition/lisp-fsrs.git")
+  t
+  ELISP> (setq weights [0.4072 1.1829 3.1262 15.4722 7.2102 0.5316 1.0651 0.0234 1.616 0.1544 1.0824 1.9813 0.0953 0.2975 2.2042 0.2407 2.9466 0.5034 0.6567])
+  [0.4072 1.1829 3.1262 15.4722 7.2102 0.5316 1.0651 0.0234 1.616 0.1544 1.0824 1.9813 0.0953 0.2975 2.2042 0.2407 2.9466 0.5034 0.6567]
+
+  ELISP> (setq scheduler (make-fsrs-scheduler :weights weights))
+  #s(fsrs-basic-scheduler :parameters #s(fsrs-parameters :request-retention 0.9 :maximum-interval 36500 :weights
+                                                          [0.4072 1.1829 3.1262 15.4722 7.2102 0.5316 1.0651 0.0234 1.616 0.1544 1.0824 1.9813 0.0953 0.2975 2.2042 0.2407 2.9466 0.5034 0.6567]
+                                                          :decay -0.5 :factor 0.23456790123456783))
+
+  ELISP> (setq card (make-fsrs-card))
+  #s(fsrs-card :due "2024-12-11T15:42:57Z" :stability 0.0 :difficulty 0.0 :elapsed-days 0 :scheduled-days 0 :repeats 0 :lapses 0 :state :new :last-review nil)
+
+  ELISP> (setq card (cl-nth-value 0 (fsrs-scheduler-review-card scheduler card :good)))
+  #s(fsrs-card :due "2024-12-11T15:53:27Z" :stability 3.1262 :difficulty 5.314577829570867 :elapsed-days 0 :scheduled-days 0 :repeats 1 :lapses 0 :state :learning :last-review "2024-12-11T15:43:27Z")
+#+END_SRC
