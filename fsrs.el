@@ -26,12 +26,18 @@
 
 (cl-deftype fsrs-state nil '(member :new :learning :review :relearning))
 
+(cl-declaim (ftype (function (fsrs-state) (integer 0 3)) fsrs-state-integer)
+ (inline fsrs-state-integer))
+
+(cl-defun fsrs-state-integer (fsrs-state)
+ (cl-ecase fsrs-state (:new 0) (:learning 1) (:review 2) (:relearning 3)))
+
 (cl-deftype fsrs-rating nil '(member :again :hard :good :easy))
 
-(cl-declaim (ftype (function (fsrs-rating) (integer 1 4)) fsrs-rating-index)
- (inline fsrs-rating-index))
+(cl-declaim (ftype (function (fsrs-rating) (integer 1 4)) fsrs-rating-integer)
+ (inline fsrs-rating-integer))
 
-(cl-defun fsrs-rating-index (fsrs-rating)
+(cl-defun fsrs-rating-integer (fsrs-rating)
  (cl-ecase fsrs-rating (:again 1) (:hard 2) (:good 3) (:easy 4)))
 
 (cl-defstruct (fsrs-review-log) (rating :again :type fsrs-rating)
@@ -159,7 +165,7 @@
 
 (cl-defun fsrs-parameters-init-stability
  (self fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-index fsrs-rating)))
+  (r (fsrs-rating-integer fsrs-rating)))
  (max (aref w (1- r)) 0.1))
 
 (cl-declaim
@@ -168,7 +174,7 @@
 
 (cl-defun fsrs-parameters-init-difficulty
  (self fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-index fsrs-rating)))
+  (r (fsrs-rating-integer fsrs-rating)))
  (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0))
 
 (defconst fsrs-most-negative-fixnum-float
@@ -208,7 +214,7 @@
 
 (cl-defun fsrs-parameters-next-difficulty
  (self d fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-index fsrs-rating)))
+  (r (fsrs-rating-integer fsrs-rating)))
  (let ((next-d (- d (* (aref w 6) (- r 3)))))
    (min
     (max
@@ -223,7 +229,7 @@
 
 (cl-defun fsrs-parameters-short-term-stability
  (self stability fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-index fsrs-rating)))
+  (r (fsrs-rating-integer fsrs-rating)))
  (* stability (exp (* (aref w 17) (+ (- r 3) (aref w 18))))))
 
 (cl-declaim

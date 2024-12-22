@@ -24,11 +24,11 @@
   (expt (1+ (/ (* (parameters-factor self) elapsed-days) stability)) (parameters-decay self)))
 
 (declaim (ftype (function (parameters rating) (values non-negative-single-float)) parameters-init-stability))
-(defun parameters-init-stability (self rating &aux (w (parameters-weights self)) (r (rating-index rating)))
+(defun parameters-init-stability (self rating &aux (w (parameters-weights self)) (r (rating-integer rating)))
   (max (aref w (1- r)) 0.1))
 
 (declaim (ftype (function (parameters rating) (values non-negative-single-float)) parameters-init-difficulty))
-(defun parameters-init-difficulty (self rating &aux (w (parameters-weights self)) (r (rating-index rating)))
+(defun parameters-init-difficulty (self rating &aux (w (parameters-weights self)) (r (rating-integer rating)))
   (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0))
 
 (defconstant most-negative-fixnum-float (coerce most-negative-fixnum 'single-float))
@@ -46,12 +46,12 @@
   (+ (* (aref w 7) init) (* (- 1.0 (aref w 7)) current)))
 
 (declaim (ftype (function (parameters non-negative-single-float rating) (values non-negative-single-float)) parameters-next-difficulty))
-(defun parameters-next-difficulty (self d rating &aux (w (parameters-weights self)) (r (rating-index rating)))
+(defun parameters-next-difficulty (self d rating &aux (w (parameters-weights self)) (r (rating-integer rating)))
   (let ((next-d (- d (* (aref w 6) (- r 3)))))
     (min (max (parameters-mean-reversion self (parameters-init-difficulty self :easy) next-d) 1.0) 10.0)))
 
 (declaim (ftype (function (parameters non-negative-single-float rating) (values non-negative-single-float)) parameters-short-term-stability))
-(defun parameters-short-term-stability (self stability rating &aux (w (parameters-weights self)) (r (rating-index rating)))
+(defun parameters-short-term-stability (self stability rating &aux (w (parameters-weights self)) (r (rating-integer rating)))
   (* stability (exp (* (aref w 17) (+ (- r 3) (aref w 18))))))
 
 (declaim (ftype (function (parameters non-negative-single-float non-negative-single-float (single-float 0.0 1.0) rating) (values non-negative-single-float)) parameters-next-recall-stability))

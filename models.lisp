@@ -3,12 +3,21 @@
 (deftype state ()
   '(member :new :learning :review :relearning))
 
+(declaim (ftype (function (state) (integer 0 3)) state-integer)
+         (inline state-integer))
+(defun state-integer (state)
+  (ecase state
+    (:new 0)
+    (:learning 1)
+    (:review 2)
+    (:relearning 3)))
+
 (deftype rating ()
   '(member :again :hard :good :easy))
 
-(declaim (ftype (function (rating) (integer 1 4)) rating-index)
-         (inline rating-index))
-(defun rating-index (rating)
+(declaim (ftype (function (rating) (integer 1 4)) rating-integer)
+         (inline rating-integer))
+(defun rating-integer (rating)
   (ecase rating
     (:again 1)
     (:hard 2)
