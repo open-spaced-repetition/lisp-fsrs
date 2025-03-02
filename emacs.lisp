@@ -8,6 +8,7 @@
 
 (defparameter *prelude*
   '((require 'cl-lib)
+    (require 'cl-generic)
     (require 'parse-time)
     (deftype timestamp () 'string)
     (defun now (&optional time)
@@ -81,8 +82,18 @@
 (defmethod translate-form ((car (eql 'defun)) cdr)
   (destructuring-bind (name lambda-list &rest body) cdr
     (setf name (first (translate-definition cdr '*mappings*)))
-    (let ((*mappings* (set-difference *mappings* (mapcar (compose #'nreverse #'first) (nth-value 3 (parse-ordinary-lambda-list lambda-list))) :key #'car)))
+    (let ((*mappings* (set-difference
+                       *mappings*
+                       (mapcar (compose #'nreverse #'first)
+                               (nth-value 3 (parse-ordinary-lambda-list lambda-list :allow-specializers t)))
+                       :key #'car)))
       (call-next-method car (list* name lambda-list body)))))
+
+(defmethod translate-form ((car (eql 'defgeneric)) cdr)
+  (cons 'cl-defgeneric (cdr (translate-form 'defun cdr))))
+
+(defmethod translate-form ((car (eql 'defmethod)) cdr)
+  (cons 'cl-defmethod (cdr (translate-form 'defun cdr))))
 
 (defmethod translate-form ((car (eql 'deftype)) cdr)
   (let ((cdr (translate-definition cdr '*mappings*))

@@ -8,6 +8,8 @@
 
 (require 'cl-lib)
 
+(require 'cl-generic)
+
 (require 'parse-time)
 
 (cl-deftype fsrs-timestamp nil 'string)
@@ -356,7 +358,7 @@
                (fsrs-parameters-next-recall-stability fsrs-parameters last-d
                 last-s retrievability :easy)))))))
 
-(cl-defgeneric scheduler-repeat (self fsrs-card &optional fsrs-now))
+(cl-defgeneric fsrs-scheduler-repeat (self fsrs-card &optional fsrs-now))
 
 (cl-declaim
  (ftype
@@ -366,7 +368,7 @@
 
 (cl-defun fsrs-scheduler-review-card
  (self fsrs-card fsrs-rating &optional (fsrs-now (fsrs-now)))
- (let* ((fsrs-scheduling-cards (scheduler-repeat self fsrs-card fsrs-now))
+ (let* ((fsrs-scheduling-cards (fsrs-scheduler-repeat self fsrs-card fsrs-now))
         (fsrs-scheduling-info (cl-getf fsrs-scheduling-cards fsrs-rating))
         (fsrs-card (fsrs-scheduling-info-card fsrs-scheduling-info))
         (fsrs-review-log
@@ -428,7 +430,7 @@
          (fsrs-card-due good) (fsrs-timestamp+ fsrs-now good-interval :day)
          (fsrs-card-due easy) (fsrs-timestamp+ fsrs-now easy-interval :day))))
 
-(cl-defmethod scheduler-repeat
+(cl-defmethod fsrs-scheduler-repeat
  ((self fsrs-basic-scheduler) fsrs-card &optional (fsrs-now (fsrs-now)))
  (let ((fsrs-card (copy-fsrs-card fsrs-card))
        (fsrs-parameters (fsrs-scheduler-parameters self)))
@@ -526,7 +528,7 @@
          (fsrs-card-due good) (fsrs-timestamp+ fsrs-now good-interval :day)
          (fsrs-card-due easy) (fsrs-timestamp+ fsrs-now easy-interval :day))))
 
-(cl-defmethod scheduler-repeat
+(cl-defmethod fsrs-scheduler-repeat
  ((self fsrs-long-term-scheduler) fsrs-card &optional (fsrs-now (fsrs-now)))
  (let ((fsrs-card (copy-fsrs-card fsrs-card))
        (fsrs-parameters (fsrs-scheduler-parameters self)))
