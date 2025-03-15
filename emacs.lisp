@@ -13,7 +13,7 @@
     (deftype timestamp ()
       "ISO 8601 UTC timestamp string type.
 
-Represents time values in 'YYYY-MM-DDTHH:MM:SSZ' format. Used
+Represents time values in `YYYY-MM-DDTHH:MM:SSZ' format. Used
 throughout FSRS for all date/time tracking related to card scheduling
 and review logging."
       'string)
@@ -145,6 +145,19 @@ seconds to TIME."
            (name-and-options (translate-definition name-and-options))
            (translated-name (car name-and-options))
            (documentation (when (stringp (car slots)) (pop slots))))
+      (loop :for keyword :in '(:constructor :copier)
+            :for prefix :in '(#:make- #:copy-)
+            :for symbol-cons := (assoc-value (cdr name-and-options) keyword)
+            :for function := (symbolicate '#:fsrs- prefix name)
+            :if symbol-cons
+              :when (car symbol-cons)
+                :do (setf (car symbol-cons)
+                          (setf (assoc-value *mappings* (car symbol-cons))
+                                (symbolicate '#:fsrs- (substitute #\- #\% (symbol-name (car symbol-cons))))))
+            :end
+            :else
+              :do (push (list keyword function) (cdr name-and-options))
+            :do (setf (assoc-value *mappings* (symbolicate prefix name)) function))
       `(cl-defstruct
         ,(translate name-and-options)
         ,@(when documentation (list documentation))
@@ -154,9 +167,7 @@ seconds to TIME."
                 :collect (cons slot-name (translate slot-options))
                 :finally
                    (setf (assoc-value *mappings* name) translated-name
-                         (assoc-value *mappings* (symbolicate name '#:-p)) (symbolicate translated-name '#:-p)
-                         (assoc-value *mappings* (symbolicate '#:make- name)) (symbolicate '#:make- translated-name)
-                         (assoc-value *mappings* (symbolicate '#:copy- name)) (symbolicate '#:copy- translated-name)))))))
+                         (assoc-value *mappings* (symbolicate name '#:-p)) (symbolicate translated-name '#:-p)))))))
 
 (defmethod translate-form ((car (eql 'coerce)) args)
   (destructuring-bind (object type) args
@@ -232,9 +243,17 @@ seconds to TIME."
   (with-open-file (output file :direction :output :if-exists :supersede)
     (format output ";;; fsrs.el --- Emacs Lisp Package for FSRS -*- lexical-binding: t -*-
 
+;; Author: Open Spaced Repetition
+;; Maintainer: Open Spaced Repetition
+;; Version: 5.0
+;; Package-Requires: ((emacs \"25.1\"))
+;; URL: https://github.com/open-spaced-repetition/lisp-fsrs
+;; Keywords: tools
+
 ;;; Commentary:
 
-;; This file was auto-transpiled from ~{~A~^, ~}.
+;; FSRS is a spaced repetition algorithm that optimizes review scheduling
+;; by adapting to individual memory patterns, outperforming SM-2.
 
 ;;; Code:
 " (mapcar (compose #'pathname-filename #'asdf:component-pathname) (asdf:component-children system)))

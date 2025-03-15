@@ -1,8 +1,16 @@
 ;;; fsrs.el --- Emacs Lisp Package for FSRS -*- lexical-binding: t -*-
 
+;; Author: Open Spaced Repetition
+;; Maintainer: Open Spaced Repetition
+;; Version: 5.0
+;; Package-Requires: ((emacs "25.1"))
+;; URL: https://github.com/open-spaced-repetition/lisp-fsrs
+;; Keywords: tools
+
 ;;; Commentary:
 
-;; This file was auto-transpiled from package.lisp, models.lisp, parameters.lisp, scheduler.lisp, basic-scheduler.lisp, long-term-scheduler.lisp.
+;; FSRS is a spaced repetition algorithm that optimizes review scheduling
+;; by adapting to individual memory patterns, outperforming SM-2.
 
 ;;; Code:
 
@@ -14,7 +22,7 @@
 
 (cl-deftype fsrs-timestamp nil "ISO 8601 UTC timestamp string type.
 
-Represents time values in 'YYYY-MM-DDTHH:MM:SSZ' format. Used
+Represents time values in `YYYY-MM-DDTHH:MM:SSZ' format. Used
 throughout FSRS for all date/time tracking related to card scheduling
 and review logging."
  'string)
@@ -70,7 +78,10 @@ Possible values: :again (failed), :hard, :good, or :easy."
  "Convert FSRS-RATING to an integer (1-4)."
  (cl-ecase fsrs-rating (:again 1) (:hard 2) (:good 3) (:easy 4)))
 
-(cl-defstruct (fsrs-review-log) "Record of individual review event.
+(cl-defstruct
+ (fsrs-review-log (:copier fsrs-copy-review-log)
+  (:constructor fsrs-make-review-log))
+ "Record of individual review event.
 
 RATING is user's response.
 SCHEDULED-DAYS was planned interval.
@@ -81,7 +92,8 @@ STATE was card state before review."
  (elapsed-days 0 :type fixnum) (review (fsrs-now) :type fsrs-timestamp)
  (state :new :type fsrs-state))
 
-(cl-defstruct (fsrs-card)
+(cl-defstruct
+ (fsrs-card (:copier fsrs-copy-card) (:constructor fsrs-make-card))
  "Represents a memorization item with scheduling state and memory metrics.
 
 DUE contains next review timestamp.
@@ -135,25 +147,29 @@ Returns single-float between 0.0 (forgotten) and 1.0 (fresh)."
              fsrs-decay))
      0.0))
 
-(cl-defstruct (fsrs-scheduling-info)
+(cl-defstruct
+ (fsrs-scheduling-info (:copier fsrs-copy-scheduling-info)
+  (:constructor fsrs-make-scheduling-info))
  "Container for card scheduling options and review metadata.
 
 CARD holds modified card state for specific rating choice.
 REVIEW-LOG records hypothetical review log entry for that choice."
- (card (make-fsrs-card) :type fsrs-card)
- (review-log (make-fsrs-review-log) :type fsrs-review-log))
+ (card (fsrs-make-card) :type fsrs-card)
+ (review-log (fsrs-make-review-log) :type fsrs-review-log))
 
-(cl-defstruct (fsrs-scheduling-cards (:constructor %make-scheduling-cards))
+(cl-defstruct
+ (fsrs-scheduling-cards (:copier fsrs-copy-scheduling-cards)
+  (:constructor fsrs--make-scheduling-cards))
  "Holds four possible scheduling paths based on user rating.
 
 AGAIN path for failed recall.
 HARD path for difficult recall.
 GOOD path for successful recall.
 EASY path for effortless recall."
- (again (make-fsrs-card) :type fsrs-card)
- (hard (make-fsrs-card) :type fsrs-card)
- (good (make-fsrs-card) :type fsrs-card)
- (easy (make-fsrs-card) :type fsrs-card))
+ (again (fsrs-make-card) :type fsrs-card)
+ (hard (fsrs-make-card) :type fsrs-card)
+ (good (fsrs-make-card) :type fsrs-card)
+ (easy (fsrs-make-card) :type fsrs-card))
 
 (cl-declaim
  (ftype
@@ -161,16 +177,16 @@ EASY path for effortless recall."
    (&key (:card fsrs-card) (:again fsrs-card) (:hard fsrs-card)
     (:good fsrs-card) (:easy fsrs-card))
    fsrs-scheduling-cards)
-  make-fsrs-scheduling-cards))
+  fsrs-make-scheduling-cards))
 
-(cl-defun make-fsrs-scheduling-cards
- (&key (card (make-fsrs-card)) (again (copy-fsrs-card card))
-  (hard (copy-fsrs-card card)) (good (copy-fsrs-card card))
-  (easy (copy-fsrs-card card)))
+(cl-defun fsrs-make-scheduling-cards
+ (&key (card (fsrs-make-card)) (again (fsrs-copy-card card))
+  (hard (fsrs-copy-card card)) (good (fsrs-copy-card card))
+  (easy (fsrs-copy-card card)))
  "Create FSRS-SCHEDULING-CARDS with cloned CARD variants.
 Each keyword argument lets override default card copies for
 ratings (EASY GOOD HARD AGAIN)."
- (%make-scheduling-cards :again again :hard hard :good good :easy easy))
+ (fsrs--make-scheduling-cards :again again :hard hard :good good :easy easy))
 
 (cl-declaim
  (ftype (function (fsrs-scheduling-cards fsrs-card fsrs-timestamp) list)
@@ -188,26 +204,26 @@ Returns (:again INFO :hard INFO :good INFO :easy INFO) plist."
        (good (fsrs-scheduling-cards-good self))
        (easy (fsrs-scheduling-cards-easy self)))
    (list :again
-         (make-fsrs-scheduling-info :card again :review-log
-          (make-fsrs-review-log :rating :again :scheduled-days
+         (fsrs-make-scheduling-info :card again :review-log
+          (fsrs-make-review-log :rating :again :scheduled-days
            (fsrs-card-scheduled-days again) :elapsed-days
            (fsrs-card-elapsed-days fsrs-card) :review fsrs-now :state
            (fsrs-card-state fsrs-card)))
          :hard
-         (make-fsrs-scheduling-info :card hard :review-log
-          (make-fsrs-review-log :rating :hard :scheduled-days
+         (fsrs-make-scheduling-info :card hard :review-log
+          (fsrs-make-review-log :rating :hard :scheduled-days
            (fsrs-card-scheduled-days hard) :elapsed-days
            (fsrs-card-elapsed-days fsrs-card) :review fsrs-now :state
            (fsrs-card-state fsrs-card)))
          :good
-         (make-fsrs-scheduling-info :card good :review-log
-          (make-fsrs-review-log :rating :good :scheduled-days
+         (fsrs-make-scheduling-info :card good :review-log
+          (fsrs-make-review-log :rating :good :scheduled-days
            (fsrs-card-scheduled-days good) :elapsed-days
            (fsrs-card-elapsed-days fsrs-card) :review fsrs-now :state
            (fsrs-card-state fsrs-card)))
          :easy
-         (make-fsrs-scheduling-info :card easy :review-log
-          (make-fsrs-review-log :rating :easy :scheduled-days
+         (fsrs-make-scheduling-info :card easy :review-log
+          (fsrs-make-review-log :rating :easy :scheduled-days
            (fsrs-card-scheduled-days easy) :elapsed-days
            (fsrs-card-elapsed-days fsrs-card) :review fsrs-now :state
            (fsrs-card-state fsrs-card))))))
@@ -227,7 +243,9 @@ Returns (:again INFO :hard INFO :good INFO :easy INFO) plist."
 
 (defconst fsrs-factor (1- (expt 0.9 (/ fsrs-decay))))
 
-(cl-defstruct (fsrs-parameters)
+(cl-defstruct
+ (fsrs-parameters (:copier fsrs-copy-parameters)
+  (:constructor fsrs-make-parameters))
  "Container for FSRS algorithm configuration parameters.
 
 REQUEST-RETENTION specifies target retention probability (0.0-1.0).
@@ -405,31 +423,31 @@ Returns recalculated stability as non-negative single float."
    (* (aref w 11) (expt d (- (aref w 12))) (1- (expt (1+ s) (aref w 13)))
       (exp (* (- 1 r) (aref w 14))))))
 
-(cl-defstruct (fsrs-scheduler (:constructor nil))
+(cl-defstruct (fsrs-scheduler (:copier fsrs-copy-scheduler) (:constructor nil))
  "Abstract base type for FSRS scheduling strategies.
 
 PARAMETERS holds model configuration and weights."
- (parameters (make-fsrs-parameters) :type fsrs-parameters))
+ (parameters (fsrs-make-parameters) :type fsrs-parameters))
 
-(cl-defun make-fsrs-scheduler
+(cl-defun fsrs-make-scheduler
  (&rest args &key
   (parameters
    (progn
     (cl-remf args :parameters)
     (cl-remf args :enable-short-term-p)
-    (apply #'make-fsrs-parameters args)))
+    (apply #'fsrs-make-parameters args)))
   (enable-short-term-p t) &allow-other-keys)
  "Create concrete scheduler instance with specified parameters.
 
 PARAMETERS can override default model weights and settings.
 ENABLE-SHORT-TERM-P selects between learning phase strategies. Other
-ARGS is passed to MAKE-FSRS-PARAMETERS as given.
+ARGS is passed to FSRS-MAKE-PARAMETERS as given.
 
 Returns FSRS-BASIC-SCHEDULER if true, FSRS-LONG-TERM-SCHEDULER otherwise."
  (funcall
   (if enable-short-term-p
-      'make-fsrs-basic-scheduler
-      'make-fsrs-long-term-scheduler)
+      'fsrs-make-basic-scheduler
+      'fsrs-make-long-term-scheduler)
   :parameters parameters))
 
 (cl-declaim
@@ -551,7 +569,9 @@ Returns updated FSRS-CARD and FSRS-REVIEW-LOG for record-keeping."
          (fsrs-scheduling-info-review-log fsrs-scheduling-info)))
    (cl-values fsrs-card fsrs-review-log)))
 
-(cl-defstruct (fsrs-basic-scheduler (:include fsrs-scheduler))
+(cl-defstruct
+ (fsrs-basic-scheduler (:copier fsrs-copy-basic-scheduler)
+  (:constructor fsrs-make-basic-scheduler) (:include fsrs-scheduler))
  "Implements FSRS's short-term learning phase strategy.
 
 Handles :new/:learning/:relearning states with graduated intervals.
@@ -632,7 +652,7 @@ FSRS-NOW is current timestamp.
 
 Handles state transitions and interval calculations for learning
 phases. Returns updated FSRS-SCHEDULING-CARDS with new intervals and logs."
- (let ((fsrs-card (copy-fsrs-card fsrs-card))
+ (let ((fsrs-card (fsrs-copy-card fsrs-card))
        (fsrs-parameters (fsrs-scheduler-parameters self)))
    (setf (fsrs-card-elapsed-days fsrs-card)
            (if (eq (fsrs-card-state fsrs-card) :new)
@@ -642,7 +662,7 @@ phases. Returns updated FSRS-SCHEDULING-CARDS with new intervals and logs."
                  (fsrs-card-last-review fsrs-card))))
          (fsrs-card-last-review fsrs-card) fsrs-now)
    (cl-incf (fsrs-card-repeats fsrs-card))
-   (let ((s (make-fsrs-scheduling-cards :card fsrs-card)))
+   (let ((s (fsrs-make-scheduling-cards :card fsrs-card)))
      (fsrs-basic-scheduler-update-state self s (fsrs-card-state fsrs-card))
      (let ((again (fsrs-scheduling-cards-again s))
            (hard (fsrs-scheduling-cards-hard s))
@@ -689,7 +709,9 @@ phases. Returns updated FSRS-SCHEDULING-CARDS with new intervals and logs."
             good-interval easy-interval)))))
      (fsrs-scheduling-cards-record-log s fsrs-card fsrs-now))))
 
-(cl-defstruct (fsrs-long-term-scheduler (:include fsrs-scheduler))
+(cl-defstruct
+ (fsrs-long-term-scheduler (:copier fsrs-copy-long-term-scheduler)
+  (:constructor fsrs-make-long-term-scheduler) (:include fsrs-scheduler))
  "Optimizes FSRS for long-term retention at the expense of learning phases.
 
 Forces all cards into :review state immediately, using geometrically
@@ -756,7 +778,7 @@ FSRS-NOW is current timestamp.
 Maintains all cards in review state with geometrically increasing
 intervals. Returns FSRS-SCHEDULING-CARDS with logarithmic interval
 progression."
- (let ((fsrs-card (copy-fsrs-card fsrs-card))
+ (let ((fsrs-card (fsrs-copy-card fsrs-card))
        (fsrs-parameters (fsrs-scheduler-parameters self)))
    (setf (fsrs-card-elapsed-days fsrs-card)
            (if (eq (fsrs-card-state fsrs-card) :new)
@@ -766,7 +788,7 @@ progression."
                  (fsrs-card-last-review fsrs-card))))
          (fsrs-card-last-review fsrs-card) fsrs-now)
    (cl-incf (fsrs-card-repeats fsrs-card))
-   (let ((s (make-fsrs-scheduling-cards :card fsrs-card)))
+   (let ((s (fsrs-make-scheduling-cards :card fsrs-card)))
      (fsrs-long-term-scheduler-update-state self s (fsrs-card-state fsrs-card))
      (let ((again (fsrs-scheduling-cards-again s))
            (hard (fsrs-scheduling-cards-hard s))
