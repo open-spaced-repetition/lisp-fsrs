@@ -257,31 +257,29 @@ Returns single-float between 0.0 and 1.0 representing recall probability."
  (ftype (function (fsrs-parameters fsrs-rating) float)
   fsrs-parameters-init-stability))
 
-(cl-defun fsrs-parameters-init-stability
- (self fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-integer fsrs-rating)))
+(cl-defun fsrs-parameters-init-stability (self fsrs-rating)
  "Compute initial stability after first review.
 
 SELF is FSRS-PARAMETERS instance. FSRS-RATING is user's response
 quality (:again/:hard/:good/:easy).
 
 Returns non-negative single-float stability value."
- (max (aref w (1- r)) 0.1))
+ (let ((w (fsrs-parameters-weights self)) (r (fsrs-rating-integer fsrs-rating)))
+   (max (aref w (1- r)) 0.1)))
 
 (cl-declaim
  (ftype (function (fsrs-parameters fsrs-rating) float)
   fsrs-parameters-init-difficulty))
 
-(cl-defun fsrs-parameters-init-difficulty
- (self fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-integer fsrs-rating)))
+(cl-defun fsrs-parameters-init-difficulty (self fsrs-rating)
  "Determine initial difficulty for new material.
 
 SELF is FSRS-PARAMETERS instance. FSRS-RATING is first response rating.
 
 Returns single-float between 1.0 and 10.0 representing item
 difficulty."
- (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0))
+ (let ((w (fsrs-parameters-weights self)) (r (fsrs-rating-integer fsrs-rating)))
+   (min (max (1+ (- (aref w 4) (exp (* (aref w 5) (1- r))))) 1.0) 10.0)))
 
 (defconst fsrs-most-negative-fixnum-float
  (cl-coerce most-negative-fixnum 'float))
@@ -315,44 +313,41 @@ Returns non-negative fixnum days until next review."
  (ftype (function (fsrs-parameters float float) float)
   fsrs-parameters-mean-reversion))
 
-(cl-defun fsrs-parameters-mean-reversion
- (self init current &aux (w (fsrs-parameters-weights self)))
+(cl-defun fsrs-parameters-mean-reversion (self init current)
  "Apply mean reversion to difficulty estimates.
 
 SELF is FSRS-PARAMETERS instance. INIT is initial difficulty value. CURRENT
 is raw difficulty estimate.
 
 Returns adjusted single-float difficulty value."
- (+ (* (aref w 7) init) (* (- 1.0 (aref w 7)) current)))
+ (let ((w (fsrs-parameters-weights self)))
+   (+ (* (aref w 7) init) (* (- 1.0 (aref w 7)) current))))
 
 (cl-declaim
  (ftype (function (fsrs-parameters float fsrs-rating) float)
   fsrs-parameters-next-difficulty))
 
-(cl-defun fsrs-parameters-next-difficulty
- (self d fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-integer fsrs-rating)))
+(cl-defun fsrs-parameters-next-difficulty (self d fsrs-rating)
  "Update difficulty after user rating.
 
 SELF is FSRS-PARAMETERS instance. D is previous difficulty value.
 FSRS-RATING is user's response rating.
 
 Returns adjusted single-float between 1.0 and 10.0."
- (let ((next-d (- d (* (aref w 6) (- r 3)))))
-   (min
-    (max
-     (fsrs-parameters-mean-reversion self
-      (fsrs-parameters-init-difficulty self :easy) next-d)
-     1.0)
-    10.0)))
+ (let ((w (fsrs-parameters-weights self)) (r (fsrs-rating-integer fsrs-rating)))
+   (let ((next-d (- d (* (aref w 6) (- r 3)))))
+     (min
+      (max
+       (fsrs-parameters-mean-reversion self
+        (fsrs-parameters-init-difficulty self :easy) next-d)
+       1.0)
+      10.0))))
 
 (cl-declaim
  (ftype (function (fsrs-parameters float fsrs-rating) float)
   fsrs-parameters-short-term-stability))
 
-(cl-defun fsrs-parameters-short-term-stability
- (self stability fsrs-rating &aux (w (fsrs-parameters-weights self))
-  (r (fsrs-rating-integer fsrs-rating)))
+(cl-defun fsrs-parameters-short-term-stability (self stability fsrs-rating)
  "Adjust short-term stability for cards in learning/relearning state.
 
 SELF is a FSRS-PARAMETERS instance containing weight coefficients.
@@ -360,15 +355,15 @@ STABILITY is a non-negative single float representing current memory
 stability. FSRS-RATING indicates user's recall correctness.
 
 Returns adjusted stability as non-negative single float."
- (* stability (exp (* (aref w 17) (+ (- r 3) (aref w 18))))))
+ (let ((w (fsrs-parameters-weights self)) (r (fsrs-rating-integer fsrs-rating)))
+   (* stability (exp (* (aref w 17) (+ (- r 3) (aref w 18)))))))
 
 (cl-declaim
  (ftype
   (function (fsrs-parameters float float (float 0.0 1.0) fsrs-rating) float)
   fsrs-parameters-next-recall-stability))
 
-(cl-defun fsrs-parameters-next-recall-stability
- (self d s r fsrs-rating &aux (w (fsrs-parameters-weights self)))
+(cl-defun fsrs-parameters-next-recall-stability (self d s r fsrs-rating)
  "Calculate new stability after successful recall.
 
 SELF is a FSRS-PARAMETERS instance containing weight coefficients. D is a
@@ -378,25 +373,25 @@ a single float between 0.0-1.0 representing memory retrievability.
 FSRS-RATING indicates user's answer difficulty.
 
 Returns new stability as non-negative single float."
- (let ((hard-penalty
-        (if (eq fsrs-rating :hard)
-            (aref w 15)
-            1.0))
-       (easy-bonus
-        (if (eq fsrs-rating :easy)
-            (aref w 16)
-            1.0)))
-   (* s
-      (1+
-       (* (exp (aref w 8)) (- 11.0 d) (expt s (- (aref w 9)))
-          (1- (exp (* (- 1.0 r) (aref w 10)))) hard-penalty easy-bonus)))))
+ (let ((w (fsrs-parameters-weights self)))
+   (let ((hard-penalty
+          (if (eq fsrs-rating :hard)
+              (aref w 15)
+              1.0))
+         (easy-bonus
+          (if (eq fsrs-rating :easy)
+              (aref w 16)
+              1.0)))
+     (* s
+        (1+
+         (* (exp (aref w 8)) (- 11.0 d) (expt s (- (aref w 9)))
+            (1- (exp (* (- 1.0 r) (aref w 10)))) hard-penalty easy-bonus))))))
 
 (cl-declaim
  (ftype (function (fsrs-parameters float float (float 0.0 1.0)) float)
   fsrs-parameters-next-forget-stability))
 
-(cl-defun fsrs-parameters-next-forget-stability
- (self d s r &aux (w (fsrs-parameters-weights self)))
+(cl-defun fsrs-parameters-next-forget-stability (self d s r)
  "Compute new stability after forgetting a card.
 
 SELF is a FSRS-PARAMETERS instance containing weight coefficients. D is a
@@ -406,8 +401,9 @@ stability. R is a single float between 0.0-1.0 representing memory
 retrievability.
 
 Returns recalculated stability as non-negative single float."
- (* (aref w 11) (expt d (- (aref w 12))) (1- (expt (1+ s) (aref w 13)))
-    (exp (* (- 1 r) (aref w 14)))))
+ (let ((w (fsrs-parameters-weights self)))
+   (* (aref w 11) (expt d (- (aref w 12))) (1- (expt (1+ s) (aref w 13)))
+      (exp (* (- 1 r) (aref w 14))))))
 
 (cl-defstruct (fsrs-scheduler (:constructor nil))
  "Abstract base type for FSRS scheduling strategies.
@@ -439,91 +435,91 @@ Returns FSRS-BASIC-SCHEDULER if true, FSRS-LONG-TERM-SCHEDULER otherwise."
 (cl-declaim
  (ftype #'(fsrs-scheduler fsrs-scheduling-cards) fsrs-scheduler-init-ds))
 
-(cl-defun fsrs-scheduler-init-ds
- (self s &aux (fsrs-parameters (fsrs-scheduler-parameters self)))
+(cl-defun fsrs-scheduler-init-ds (self s)
  "Initialize difficulty/stability for new cards in SCHEDULING-CARDS.
 
 SELF is FSRS-SCHEDULER instance. S contains card variants to initialize.
 
 Sets values for all rating paths using PARAMETERS."
- (let ((again (fsrs-scheduling-cards-again s))
-       (hard (fsrs-scheduling-cards-hard s))
-       (good (fsrs-scheduling-cards-good s))
-       (easy (fsrs-scheduling-cards-easy s)))
-   (setf (fsrs-card-difficulty again)
-           (fsrs-parameters-init-difficulty fsrs-parameters :again)
-         (fsrs-card-stability again)
-           (fsrs-parameters-init-stability fsrs-parameters :again)
-         (fsrs-card-difficulty hard)
-           (fsrs-parameters-init-difficulty fsrs-parameters :hard)
-         (fsrs-card-stability hard)
-           (fsrs-parameters-init-stability fsrs-parameters :hard)
-         (fsrs-card-difficulty good)
-           (fsrs-parameters-init-difficulty fsrs-parameters :good)
-         (fsrs-card-stability good)
-           (fsrs-parameters-init-stability fsrs-parameters :good)
-         (fsrs-card-difficulty easy)
-           (fsrs-parameters-init-difficulty fsrs-parameters :easy)
-         (fsrs-card-stability easy)
-           (fsrs-parameters-init-stability fsrs-parameters :easy))))
+ (let ((fsrs-parameters (fsrs-scheduler-parameters self)))
+   (let ((again (fsrs-scheduling-cards-again s))
+         (hard (fsrs-scheduling-cards-hard s))
+         (good (fsrs-scheduling-cards-good s))
+         (easy (fsrs-scheduling-cards-easy s)))
+     (setf (fsrs-card-difficulty again)
+             (fsrs-parameters-init-difficulty fsrs-parameters :again)
+           (fsrs-card-stability again)
+             (fsrs-parameters-init-stability fsrs-parameters :again)
+           (fsrs-card-difficulty hard)
+             (fsrs-parameters-init-difficulty fsrs-parameters :hard)
+           (fsrs-card-stability hard)
+             (fsrs-parameters-init-stability fsrs-parameters :hard)
+           (fsrs-card-difficulty good)
+             (fsrs-parameters-init-difficulty fsrs-parameters :good)
+           (fsrs-card-stability good)
+             (fsrs-parameters-init-stability fsrs-parameters :good)
+           (fsrs-card-difficulty easy)
+             (fsrs-parameters-init-difficulty fsrs-parameters :easy)
+           (fsrs-card-stability easy)
+             (fsrs-parameters-init-stability fsrs-parameters :easy)))))
 
 (cl-declaim
  (ftype #'(fsrs-scheduler fsrs-scheduling-cards fsrs-card)
   fsrs-scheduler-next-ds))
 
-(cl-defun fsrs-scheduler-next-ds
- (self s fsrs-card &aux (fsrs-parameters (fsrs-scheduler-parameters self)))
+(cl-defun fsrs-scheduler-next-ds (self s fsrs-card)
  "Update difficulty/stability for existing cards after review.
 
 SELF is FSRS-SCHEDULER instance. S contains card variants to update. FSRS-CARD
 is previous state before review.
 
 Applies different stability formulas for learning/review phases."
- (let* ((last-d (fsrs-card-difficulty fsrs-card))
-        (last-s (fsrs-card-stability fsrs-card))
-        (interval (fsrs-card-elapsed-days fsrs-card))
-        (retrievability
-         (fsrs-parameters-forgetting-curve fsrs-parameters interval last-s))
-        (fsrs-state (fsrs-card-state fsrs-card)))
-   (let ((again (fsrs-scheduling-cards-again s))
-         (hard (fsrs-scheduling-cards-hard s))
-         (good (fsrs-scheduling-cards-good s))
-         (easy (fsrs-scheduling-cards-easy s)))
-     (setf (fsrs-card-difficulty again)
-             (fsrs-parameters-next-difficulty fsrs-parameters last-d :again)
-           (fsrs-card-difficulty hard)
-             (fsrs-parameters-next-difficulty fsrs-parameters last-d :hard)
-           (fsrs-card-difficulty good)
-             (fsrs-parameters-next-difficulty fsrs-parameters last-d :good)
-           (fsrs-card-difficulty easy)
-             (fsrs-parameters-next-difficulty fsrs-parameters last-d :easy))
-     (cl-ecase fsrs-state
-      ((:learning :relearning)
-       (setf (fsrs-card-stability again)
-               (fsrs-parameters-short-term-stability fsrs-parameters last-s
-                :again)
-             (fsrs-card-stability hard)
-               (fsrs-parameters-short-term-stability fsrs-parameters last-s
-                :hard)
-             (fsrs-card-stability good)
-               (fsrs-parameters-short-term-stability fsrs-parameters last-s
-                :good)
-             (fsrs-card-stability easy)
-               (fsrs-parameters-short-term-stability fsrs-parameters last-s
-                :easy)))
-      (:review
-       (setf (fsrs-card-stability again)
-               (fsrs-parameters-next-forget-stability fsrs-parameters last-d
-                last-s retrievability)
-             (fsrs-card-stability hard)
-               (fsrs-parameters-next-recall-stability fsrs-parameters last-d
-                last-s retrievability :hard)
-             (fsrs-card-stability good)
-               (fsrs-parameters-next-recall-stability fsrs-parameters last-d
-                last-s retrievability :good)
-             (fsrs-card-stability easy)
-               (fsrs-parameters-next-recall-stability fsrs-parameters last-d
-                last-s retrievability :easy)))))))
+ (let ((fsrs-parameters (fsrs-scheduler-parameters self)))
+   (let* ((last-d (fsrs-card-difficulty fsrs-card))
+          (last-s (fsrs-card-stability fsrs-card))
+          (interval (fsrs-card-elapsed-days fsrs-card))
+          (retrievability
+           (fsrs-parameters-forgetting-curve fsrs-parameters interval last-s))
+          (fsrs-state (fsrs-card-state fsrs-card)))
+     (let ((again (fsrs-scheduling-cards-again s))
+           (hard (fsrs-scheduling-cards-hard s))
+           (good (fsrs-scheduling-cards-good s))
+           (easy (fsrs-scheduling-cards-easy s)))
+       (setf (fsrs-card-difficulty again)
+               (fsrs-parameters-next-difficulty fsrs-parameters last-d :again)
+             (fsrs-card-difficulty hard)
+               (fsrs-parameters-next-difficulty fsrs-parameters last-d :hard)
+             (fsrs-card-difficulty good)
+               (fsrs-parameters-next-difficulty fsrs-parameters last-d :good)
+             (fsrs-card-difficulty easy)
+               (fsrs-parameters-next-difficulty fsrs-parameters last-d :easy))
+       (cl-ecase fsrs-state
+        ((:learning :relearning)
+         (setf (fsrs-card-stability again)
+                 (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                  :again)
+               (fsrs-card-stability hard)
+                 (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                  :hard)
+               (fsrs-card-stability good)
+                 (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                  :good)
+               (fsrs-card-stability easy)
+                 (fsrs-parameters-short-term-stability fsrs-parameters last-s
+                  :easy)))
+        (:review
+         (setf (fsrs-card-stability again)
+                 (fsrs-parameters-next-forget-stability fsrs-parameters last-d
+                  last-s retrievability)
+               (fsrs-card-stability hard)
+                 (fsrs-parameters-next-recall-stability fsrs-parameters last-d
+                  last-s retrievability :hard)
+               (fsrs-card-stability good)
+                 (fsrs-parameters-next-recall-stability fsrs-parameters last-d
+                  last-s retrievability :good)
+               (fsrs-card-stability easy)
+                 (fsrs-parameters-next-recall-stability fsrs-parameters last-d
+                  last-s retrievability :easy))))))))
 
 (cl-defgeneric fsrs-scheduler-repeat (self fsrs-card &optional fsrs-now)
  (:documentation "Generate scheduling options after card review.
