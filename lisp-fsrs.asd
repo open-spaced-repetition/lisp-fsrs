@@ -16,7 +16,7 @@
   :in-order-to ((test-op (test-op #:lisp-fsrs/test))))
 
 (defsystem lisp-fsrs/emacs
-  :depends-on (#:asdf #:uiop #:alexandria #:local-time #:slynk #:introspect-environment #:lisp-fsrs)
+  :depends-on (#:asdf #:uiop #:alexandria #:local-time #:slynk #:introspect-environment #:str #:lisp-fsrs)
   :components ((:file "emacs")))
 
 (defsystem lisp-fsrs/test

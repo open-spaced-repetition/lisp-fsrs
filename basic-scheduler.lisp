@@ -1,9 +1,20 @@
 (in-package #:lisp-fsrs)
 
-(defstruct (basic-scheduler (:include scheduler)))
+(defstruct (basic-scheduler (:include scheduler))
+  "Implements FSRS's short-term learning phase strategy.
+
+Handles :new/:learning/:relearning states with graduated intervals.
+Prioritizes minimum viable intervals (minutes) for failed cards
+and progressive day-based scheduling for successful recalls.")
 
 (declaim (ftype (function (basic-scheduler scheduling-cards state)) basic-scheduler-update-state))
 (defun basic-scheduler-update-state (self cards state)
+  "Update card states for short-term scheduling strategy.
+
+SELF is BASIC-SCHEDULER instance. CARDS is SCHEDULING-CARDS container.
+STATE is current learning phase of original card.
+
+Sets :review state for successful paths and :relearning for failures."
   (declare (ignore self))
   (let ((again (scheduling-cards-again cards))
         (hard (scheduling-cards-hard cards))
@@ -29,6 +40,12 @@
 
 (declaim (ftype (function (basic-scheduler scheduling-cards timestamp non-negative-fixnum non-negative-fixnum non-negative-fixnum non-negative-fixnum)) basic-scheduler-schedule))
 (defun basic-scheduler-schedule (self cards now again-interval hard-interval good-interval easy-interval)
+  "Assign due dates and intervals for all rating paths.
+
+SELF is BASIC-SCHEDULER instance. CARDS contains scheduling options to
+modify. NOW is current timestamp basis for due dates. EASY-INTERVAL,
+GOOD-INTERVAL, HARD-INTERVAL, and AGAIN-INTERVAL specify days until
+next review for each rating."
   (declare (ignore self again-interval))
   (let ((again (scheduling-cards-again cards))
         (hard (scheduling-cards-hard cards))
@@ -46,6 +63,13 @@
           (card-due easy) (timestamp+ now easy-interval :day))))
 
 (defmethod scheduler-repeat ((self basic-scheduler) card &optional (now (now)))
+  "Generate next scheduling options after BASIC-SCHEDULER review.
+
+SELF is BASIC-SCHEDULER instance. CARD is item being rescheduled.
+NOW is current timestamp.
+
+Handles state transitions and interval calculations for learning
+phases. Returns updated SCHEDULING-CARDS with new intervals and logs."
   (let ((card (copy-card card))
         (parameters (scheduler-parameters self)))
     (setf (card-elapsed-days card) (if (eq (card-state card) :new) 0 (seconds-days (timestamp-difference now (card-last-review card))))

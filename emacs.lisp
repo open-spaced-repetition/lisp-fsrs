@@ -10,13 +10,35 @@
   '((require 'cl-lib)
     (require 'cl-generic)
     (require 'parse-time)
-    (deftype timestamp () 'string)
+    (deftype timestamp ()
+      "ISO 8601 UTC timestamp string type.
+
+Represents time values in 'YYYY-MM-DDTHH:MM:SSZ' format. Used
+throughout FSRS for all date/time tracking related to card scheduling
+and review logging."
+      'string)
     (defun now (&optional time)
+      "Get current UTC time as TIMESTAMP string.
+
+When TIME is non-nil (accepts time value or nil), format that instead
+of current time. Returns string formatted according to ISO 8601 with
+UTC timezone."
       (format-time-string "%FT%TZ" time "UTC0"))
     (defun timestamp-difference (time-a time-b)
+      "Calculate difference between two timestamps in seconds.
+
+TIME-A and TIME-B must both be TIMESTAMP strings. Returns
+floating-point number representing TIME-A minus TIME-B in seconds.
+Handles ISO 8601 parsing."
       (- (time-to-seconds (parse-iso8601-time-string time-a))
          (time-to-seconds (parse-iso8601-time-string time-b))))
     (defun timestamp+ (time amount unit)
+      "Create new TIMESTAMP by adding time units.
+
+TIME is base TIMESTAMP string. AMOUNT is number of units to add. UNIT
+is one of :sec/:minute/:hour/:day keyword specifying time unit.
+Returns new ISO 8601 string calculated by adding AMOUNT × UNIT's
+seconds to TIME."
       (now
        (+ (time-to-seconds (parse-iso8601-time-string time))
           (* amount
@@ -38,6 +60,12 @@
               (push (cons symbol cl-symbol) mappings)
               (unless (slynk:eval-in-emacs `(fboundp ',symbol))
                 (warn "Function/macro ~A is not available in Emacs Lisp." symbol))))))))
+
+(defun translate-docstring (docstring)
+  (str:replace-using
+   (loop :for (from . to) :in *mappings*
+         :nconc (list (format nil "(?<=\\s)~A(?=\\s)" (ppcre:quote-meta-chars (symbol-name from))) (symbol-name to)))
+   docstring :regex t))
 
 (defgeneric translate-form (car cdr))
 
@@ -87,9 +115,13 @@
                        (mapcar (compose #'nreverse #'first)
                                (nth-value 3 (parse-ordinary-lambda-list lambda-list :allow-specializers t)))
                        :key #'car)))
+      (when (stringp (car body))
+        (setf (car body) (translate-docstring (car body))))
       (call-next-method car (list* name lambda-list body)))))
 
 (defmethod translate-form ((car (eql 'defgeneric)) cdr)
+  (when-let ((documentation (assoc-value (cddr cdr) :documentation)))
+    (setf (car documentation) (translate-docstring (car documentation))))
   (cons 'cl-defgeneric (cdr (translate-form 'defun cdr))))
 
 (defmethod translate-form ((car (eql 'defmethod)) cdr)
@@ -111,17 +143,20 @@
     (let* ((name-and-options (ensure-cons name-and-options))
            (name (car name-and-options))
            (name-and-options (translate-definition name-and-options))
-           (translated-name (car name-and-options)))
-      (list* 'cl-defstruct (translate name-and-options)
-             (loop :for slot :in slots
-                   :for (slot-name . slot-options) := (ensure-cons slot)
-                   :do (setf (assoc-value *mappings* (symbolicate name '#:- slot-name)) (symbolicate translated-name '#:- slot-name))
-                   :collect (cons slot-name (translate slot-options))
-                   :finally
-                      (setf (assoc-value *mappings* name) translated-name
-                            (assoc-value *mappings* (symbolicate name '#:-p)) (symbolicate translated-name '#:-p)
-                            (assoc-value *mappings* (symbolicate '#:make- name)) (symbolicate '#:make- translated-name)
-                            (assoc-value *mappings* (symbolicate '#:copy- name)) (symbolicate '#:copy- translated-name)))))))
+           (translated-name (car name-and-options))
+           (documentation (when (stringp (car slots)) (pop slots))))
+      `(cl-defstruct
+        ,(translate name-and-options)
+        ,@(when documentation (list documentation))
+        ,@(loop :for slot :in slots
+                :for (slot-name . slot-options) := (ensure-cons slot)
+                :do (setf (assoc-value *mappings* (symbolicate name '#:- slot-name)) (symbolicate translated-name '#:- slot-name))
+                :collect (cons slot-name (translate slot-options))
+                :finally
+                   (setf (assoc-value *mappings* name) translated-name
+                         (assoc-value *mappings* (symbolicate name '#:-p)) (symbolicate translated-name '#:-p)
+                         (assoc-value *mappings* (symbolicate '#:make- name)) (symbolicate '#:make- translated-name)
+                         (assoc-value *mappings* (symbolicate '#:copy- name)) (symbolicate '#:copy- translated-name)))))))
 
 (defmethod translate-form ((car (eql 'coerce)) args)
   (destructuring-bind (object type) args

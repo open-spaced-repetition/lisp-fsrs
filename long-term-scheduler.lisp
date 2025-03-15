@@ -1,9 +1,20 @@
 (in-package #:lisp-fsrs)
 
-(defstruct (long-term-scheduler (:include scheduler)))
+(defstruct (long-term-scheduler (:include scheduler))
+  "Optimizes FSRS for long-term retention at the expense of learning phases.
+
+Forces all cards into :review state immediately, using geometrically
+increasing intervals to maximize memory stability. Suitable for advanced
+learners prioritizing efficiency over initial memorization.")
 
 (declaim (ftype (function (long-term-scheduler scheduling-cards state)) long-term-scheduler-update-state))
 (defun long-term-scheduler-update-state (self cards state)
+  "Force all scheduling paths to :review state.
+
+SELF is LONG-TERM-SCHEDULER instance. CARDS is SCHEDULING-CARDS
+container.
+
+Ignores original STATE to prioritize long-term retention strategy."
   (declare (ignore self state))
   (let ((again (scheduling-cards-again cards))
         (hard (scheduling-cards-hard cards))
@@ -16,6 +27,13 @@
 
 (declaim (ftype (function (long-term-scheduler scheduling-cards timestamp non-negative-fixnum non-negative-fixnum non-negative-fixnum non-negative-fixnum)) long-term-scheduler-schedule))
 (defun long-term-scheduler-schedule (self cards now again-interval hard-interval good-interval easy-interval)
+  "Schedule all ratings as day-based intervals in progression.
+
+SELF is LONG-TERM-SCHEDULER instance. CARDS contains scheduling
+options to modify. NOW is basis for due date calculations.
+
+Ensures EASY-INTERVAL > GOOD-INTERVAL > HARD-INTERVAL > AGAIN-INTERVAL
+for spaced progression."
   (declare (ignore self))
   (let ((again (scheduling-cards-again cards))
         (hard (scheduling-cards-hard cards))
@@ -31,6 +49,14 @@
           (card-due easy) (timestamp+ now easy-interval :day))))
 
 (defmethod scheduler-repeat ((self long-term-scheduler) card &optional (now (now)))
+  "Generate long-term focused scheduling options.
+
+SELF is LONG-TERM-SCHEDULER instance. CARD is item being rescheduled.
+NOW is current timestamp.
+
+Maintains all cards in review state with geometrically increasing
+intervals. Returns SCHEDULING-CARDS with logarithmic interval
+progression."
   (let ((card (copy-card card))
         (parameters (scheduler-parameters self)))
     (setf (card-elapsed-days card) (if (eq (card-state card) :new) 0 (seconds-days (timestamp-difference now (card-last-review card))))
