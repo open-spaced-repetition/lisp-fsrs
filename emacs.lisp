@@ -241,7 +241,7 @@ seconds to TIME."
                            (*package* #.*package*))
   (translate-component system (make-string-output-stream))
   (with-open-file (output file :direction :output :if-exists :supersede)
-    (format output ";;; fsrs.el --- Emacs Lisp Package for FSRS -*- lexical-binding: t -*-
+    (format output ";;; fsrs.el --- FSRS (Free Spaced Repetition Scheduler) implementation on Emacs -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025 Open Spaced Repetition
 
@@ -274,10 +274,11 @@ seconds to TIME."
 
 ;;; Commentary:
 
-;; FSRS is a spaced repetition algorithm that optimizes review scheduling
-;; by adapting to individual memory patterns, outperforming SM-2.
+;; FSRS (Free Spaced Repetition Scheduler) is a spaced repetition
+;; algorithm that optimizes review scheduling by adapting to individual
+;; memory patterns, outperforming traditional algorithms like SM-2.
 
 ;;; Code:
-" (mapcar (compose #'pathname-filename #'asdf:component-pathname) (asdf:component-children system)))
+")
     (translate-component system output)
     (format output ";;; ~A.~A ends here~%" (pathname-name file) (pathname-type file))))

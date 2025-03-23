@@ -1,4 +1,4 @@
-;;; fsrs.el --- Emacs Lisp Package for FSRS -*- lexical-binding: t -*-
+;;; fsrs.el --- FSRS (Free Spaced Repetition Scheduler) implementation on Emacs -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025 Open Spaced Repetition
 
@@ -31,8 +31,9 @@
 
 ;;; Commentary:
 
-;; FSRS is a spaced repetition algorithm that optimizes review scheduling
-;; by adapting to individual memory patterns, outperforming SM-2.
+;; FSRS (Free Spaced Repetition Scheduler) is a spaced repetition
+;; algorithm that optimizes review scheduling by adapting to individual
+;; memory patterns, outperforming traditional algorithms like SM-2.
 
 ;;; Code:
 
