@@ -241,7 +241,7 @@ seconds to TIME."
                            (*package* #.*package*))
   (translate-component system (make-string-output-stream))
   (with-open-file (output file :direction :output :if-exists :supersede)
-    (format output ";;; fsrs.el --- FSRS (Free Spaced Repetition Scheduler) implementation on Emacs -*- lexical-binding: t -*-
+    (format output ";;; fsrs.el --- Free Spaced Repetition Scheduler -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025 Open Spaced Repetition
 

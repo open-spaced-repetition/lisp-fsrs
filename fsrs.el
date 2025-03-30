@@ -1,4 +1,4 @@
-;;; fsrs.el --- FSRS (Free Spaced Repetition Scheduler) implementation on Emacs -*- lexical-binding: t -*-
+;;; fsrs.el --- Free Spaced Repetition Scheduler -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025 Open Spaced Repetition
 
