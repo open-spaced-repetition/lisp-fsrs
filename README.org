@@ -1,4 +1,7 @@
 #+TITLE: LISP-FSRS
+
+[[https://melpa.org/#/fsrs][file:https://melpa.org/packages/fsrs-badge.svg]]
+
 Implementation of the FSRS algorithm in Common Lisp and auto-transpiled to Emacs Lisp.
 * Usage
 ** Common Lisp
