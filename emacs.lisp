@@ -53,18 +53,22 @@ seconds to TIME."
 
 (defvar *mappings*
   (let (mappings)
-    (do-external-symbols (symbol :cl mappings)
-      (when (fboundp symbol)
-        (let ((cl-symbol (symbolicate '#:cl- symbol)))
-          (if (slynk:eval-in-emacs `(fboundp ',cl-symbol))
-              (push (cons symbol cl-symbol) mappings)
-              (unless (slynk:eval-in-emacs `(fboundp ',symbol))
-                (warn "Function/macro ~A is not available in Emacs Lisp." symbol))))))))
+    (flet ((map-symbol (symbol)
+             (when (fboundp symbol)
+               (let ((cl-symbol (symbolicate '#:cl- symbol)))
+                 (if (slynk:eval-in-emacs `(or (fboundp ',cl-symbol) (macrop ',cl-symbol)))
+                     (push (cons symbol cl-symbol) mappings)
+                     (unless (slynk:eval-in-emacs `(or (fboundp ',symbol) (macrop ',symbol)))
+                       (warn "Function/macro ~A is not available in Emacs Lisp." symbol)))))))
+      (do-external-symbols (symbol :cl mappings)
+        (map-symbol symbol))
+      (do-external-symbols (symbol :alexandria mappings)
+        (map-symbol symbol)))))
 
 (defun translate-docstring (docstring)
   (str:replace-using
    (loop :for (from . to) :in *mappings*
-         :nconc (list (format nil "(?<=\\s)~A(?=\\s)" (ppcre:quote-meta-chars (symbol-name from))) (symbol-name to)))
+         :nconc (list (format nil "(?<=\\s)~A(?=[\\s,.?!:;\\(\\)])" (ppcre:quote-meta-chars (symbol-name from))) (symbol-name to)))
    docstring :regex t))
 
 (defgeneric translate-form (car cdr))
@@ -77,6 +81,11 @@ seconds to TIME."
     (t object)))
 
 (defmethod translate-form ((car symbol) cdr)
+  (when-let ((macro (and (string-prefix-p (symbol-name 'define) (symbol-name car))
+                         (find-symbol (symbol-name car) #.(find-package '#:fsrs)))))
+    (let ((expanded (macroexpand-1 (cons macro cdr))))
+      (when (eq (car expanded) 'defun)
+        (translate expanded))))
   (cons (or (assoc-value *mappings* car) car) (mapcar #'translate cdr)))
 
 (defmethod translate-form (car cdr)
@@ -118,6 +127,9 @@ seconds to TIME."
       (when (stringp (car body))
         (setf (car body) (translate-docstring (car body))))
       (call-next-method car (list* name lambda-list body)))))
+
+(defmethod translate-form ((car (eql 'defmacro)) cdr)
+  (cons 'cl-defmacro (cdr (translate-form 'defun cdr))))
 
 (defmethod translate-form ((car (eql 'defgeneric)) cdr)
   (when-let ((documentation (assoc-value (cddr cdr) :documentation)))
@@ -205,6 +217,18 @@ seconds to TIME."
               (list clause))))
      (t cdr))))
 
+(defmethod translate-form ((car (eql 'loop)) cdr)
+  (cons
+   'cl-loop
+   (loop :for (keyword form) :on cdr :by #'cddr
+         :when (keywordp keyword)
+           :do (setf keyword (intern (symbol-name keyword)))
+         :nconc (list keyword (translate form)))))
+
+(defmethod translate-form ((car (eql 'assoc-value)) cdr)
+  (destructuring-bind (alist key &key (test '(function eql))) cdr
+    (list 'alist-get (translate key) (translate alist) nil nil (translate test))))
+
 (setf (assoc-value *mappings* 'single-float) 'float
       (assoc-value *mappings* 'double-float) 'float
       (assoc-value *mappings* 'non-negative-single-float) 'float
@@ -247,7 +271,7 @@ seconds to TIME."
 
 ;; Author: Open Spaced Repetition
 ;; Maintainer: Open Spaced Repetition
-;; Version: 5.0
+;; Version: ~A
 ;; Package-Requires: ((emacs \"25.1\"))
 ;; URL: https://github.com/open-spaced-repetition/lisp-fsrs
 ;; Keywords: tools
@@ -279,6 +303,6 @@ seconds to TIME."
 ;; memory patterns, outperforming traditional algorithms like SM-2.
 
 ;;; Code:
-")
+" (asdf:component-version (asdf:find-system '#:lisp-fsrs)))
     (translate-component system output)
     (format output ";;; ~A.~A ends here~%" (pathname-name file) (pathname-type file))))
