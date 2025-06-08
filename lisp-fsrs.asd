@@ -1,5 +1,5 @@
 (defsystem lisp-fsrs
-  :version "1.0.0"
+  :version "6.0"
   :author "Bohong Huang <bohonghuang@qq.com>"
   :maintainer "Bohong Huang <bohonghuang@qq.com>"
   :license "MIT"
@@ -7,12 +7,7 @@
   :bug-tracker "https://github.com/open-spaced-repetition/lisp-fsrs/issues"
   :source-control (:git "https://github.com/open-spaced-repetition/lisp-fsrs.git")
   :depends-on (#:alexandria #:local-time)
-  :components ((:file "package")
-               (:file "models" :depends-on ("package"))
-               (:file "parameters" :depends-on ("package" "models"))
-               (:file "scheduler" :depends-on ("package" "models" "parameters"))
-               (:file "basic-scheduler" :depends-on ("package" "models" "parameters" "scheduler"))
-               (:file "long-term-scheduler" :depends-on ("package" "models" "parameters" "scheduler")))
+  :components ((:file "package"))
   :in-order-to ((test-op (test-op #:lisp-fsrs/test))))
 
 (defsystem lisp-fsrs/emacs
