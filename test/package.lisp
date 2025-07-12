@@ -60,7 +60,8 @@
 (define-test test-custom-scheduler-args :parent test-lisp-fsrs
   (loop :with scheduler := (make-scheduler :desired-retention 0.9
                                            :maximum-interval '(36500 :day)
-                                           :enable-fuzzing-p nil)
+                                           :enable-fuzzing-p nil
+                                           :parameters +default-parameters+)
         :for rating :in +test-ratings+
         :for now := (encode-timestamp 0 0 30 12 29 11 2022 :timezone +utc-zone+) :then (card-due card)
         :for card := (nth-value 0 (scheduler-review-card scheduler (or card (make-card)) rating now))
