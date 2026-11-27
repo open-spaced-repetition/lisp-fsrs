@@ -266,6 +266,26 @@
         :for card := (nth-value 0 (scheduler-review-card scheduler (or card (make-card)) :again now))
         :do (is >= +minimum-stability+ (card-stability card))))
 
+(define-test test-learning-and-relearning-again-after-one-day :parent test-lisp-fsrs
+  (let* ((scheduler (make-scheduler :learning-steps '((10 :minute) (1 :day))
+                                    :relearning-steps '((10 :minute))
+                                    :enable-fuzzing-p nil))
+         (t0 (encode-timestamp 0 0 0 21 1 1 2026 :timezone +utc-zone+))
+         (t1 (timestamp+ t0 1 :day)))
+    ;; Learning card rated :again after >= 1 day should decrease stability.
+    (let* ((c1 (nth-value 0 (scheduler-review-card scheduler (make-card) :good t0)))
+           (c2 (nth-value 0 (scheduler-review-card scheduler c1 :again t1))))
+      (is eq :learning (card-state c1))
+      (is eq :learning (card-state c2))
+      (is < (card-stability c1) (card-stability c2)))
+    ;; Relearning card rated :again after >= 1 day should decrease stability.
+    (let* ((r0 (nth-value 0 (scheduler-review-card scheduler (make-card) :easy t0)))
+           (r1 (nth-value 0 (scheduler-review-card scheduler r0 :again (card-due r0))))
+           (r2 (nth-value 0 (scheduler-review-card scheduler r1 :again (timestamp+ (card-due r1) 1 :day)))))
+      (is eq :relearning (card-state r1))
+      (is eq :relearning (card-state r2))
+      (is < (card-stability r1) (card-stability r2)))))
+
 (define-test test-scheduler-parameter-validation :parent test-lisp-fsrs
   (of-type scheduler (make-scheduler :parameters +default-parameters+))
 
