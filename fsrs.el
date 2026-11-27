@@ -531,7 +531,7 @@ FSRS-RETRIEVABILITY is the recall probability."
            (exp
             (* (aref (fsrs-scheduler-parameters fsrs-scheduler) 17)
                (aref (fsrs-scheduler-parameters fsrs-scheduler) 18))))))
-   (min long-term short-term)))
+   (fsrs-scheduler-clamp-stability fsrs-scheduler (min long-term short-term))))
 
 (cl-declaim
  (ftype
@@ -649,12 +649,18 @@ duration."
                       (fsrs-card-difficulty fsrs-card) fsrs-rating)))
             (t
              (setf (fsrs-card-stability fsrs-card)
-                     (fsrs-scheduler-next-recall-stability fsrs-scheduler
-                      (fsrs-card-difficulty fsrs-card)
-                      (fsrs-card-stability fsrs-card)
-                      (fsrs-scheduler-card-retrievability fsrs-scheduler
-                       fsrs-card review-time)
-                      fsrs-rating)
+                     (if (eq fsrs-rating :again)
+                         (fsrs-scheduler-next-forget-stability fsrs-scheduler
+                          (fsrs-card-difficulty fsrs-card)
+                          (fsrs-card-stability fsrs-card)
+                          (fsrs-scheduler-card-retrievability fsrs-scheduler
+                           fsrs-card review-time))
+                         (fsrs-scheduler-next-recall-stability fsrs-scheduler
+                          (fsrs-card-difficulty fsrs-card)
+                          (fsrs-card-stability fsrs-card)
+                          (fsrs-scheduler-card-retrievability fsrs-scheduler
+                           fsrs-card review-time)
+                          fsrs-rating))
                    (fsrs-card-difficulty fsrs-card)
                      (fsrs-scheduler-next-difficulty fsrs-scheduler
                       (fsrs-card-difficulty fsrs-card) fsrs-rating))))
@@ -762,12 +768,18 @@ duration."
                        (fsrs-scheduler-next-difficulty fsrs-scheduler
                         (fsrs-card-difficulty fsrs-card) fsrs-rating))
                (setf (fsrs-card-stability fsrs-card)
-                       (fsrs-scheduler-next-recall-stability fsrs-scheduler
-                        (fsrs-card-difficulty fsrs-card)
-                        (fsrs-card-stability fsrs-card)
-                        (fsrs-scheduler-card-retrievability fsrs-scheduler
-                         fsrs-card review-time)
-                        fsrs-rating)
+                       (if (eq fsrs-rating :again)
+                           (fsrs-scheduler-next-forget-stability fsrs-scheduler
+                            (fsrs-card-difficulty fsrs-card)
+                            (fsrs-card-stability fsrs-card)
+                            (fsrs-scheduler-card-retrievability fsrs-scheduler
+                             fsrs-card review-time))
+                           (fsrs-scheduler-next-recall-stability fsrs-scheduler
+                            (fsrs-card-difficulty fsrs-card)
+                            (fsrs-card-stability fsrs-card)
+                            (fsrs-scheduler-card-retrievability fsrs-scheduler
+                             fsrs-card review-time)
+                            fsrs-rating))
                      (fsrs-card-difficulty fsrs-card)
                        (fsrs-scheduler-next-difficulty fsrs-scheduler
                         (fsrs-card-difficulty fsrs-card) fsrs-rating)))
